@@ -1,0 +1,1 @@
+ cat index_prefix.htmlpart > index.html; markdown index.md >> index.html; cat index_postfix.htmlpart >> index.html

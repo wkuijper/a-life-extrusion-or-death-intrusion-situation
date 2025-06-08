@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Project Quipu</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <p><a href="../the-outdoor-ordinary-school">previous-blog-post</a>&nbsp;<a href="../blog">blog-dependency-graph</a>
+  <hr>

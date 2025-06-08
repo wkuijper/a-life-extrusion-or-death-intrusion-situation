@@ -1,0 +1,29 @@
+body {
+    font: 16px sans-serif;
+    margin: auto;
+    max-width: 80%;
+}
+
+h1, h2, h3, h4 {
+    color: #888;
+}
+
+
+blockquote {
+    font-style: italic;
+    line-height: 1.7;
+    overflow-wrap: break-word;
+    text-align: left;
+}
+
+p {
+    line-height: 1.7;
+    overflow-wrap: break-word;
+    text-align: left;
+}
+
+img {
+    width: 100%;
+    height: auto;
+}
+
