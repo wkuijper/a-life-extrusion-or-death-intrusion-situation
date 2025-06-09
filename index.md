@@ -1,4 +1,4 @@
-# Life Extrusion Death Intrusion
+# A Life Extrusion or Death Intrusion Situation
 
 We are at the kusp of something profound. That could mean, deep, like
 an abyss or moving like an epiphany.
@@ -47,7 +47,7 @@ In fact, the only real reason that I can see would be to maintain
 or the balance of life itself rather, is, I believe, *the balance
 between order and chaos*.
 
-But that's rather abstract. 
+But that's still rather abstract.
 
 So far I've maintained that its possible, almost as a proposition to
 the Universe, for us to conduce to this balance in symbiosis with a
@@ -78,11 +78,47 @@ I mostly think this is important because the trajectory we end
 up on will determine, to a large extend, what our lives will be like.
 
 In particular, I believe the abrupt variant will almost inevitably
-result in a *pathological* form of father's care and a *pathological*
-form of mother's care for *life as a whole*.
+result in us engaging in a *pathological* form of father's care and a
+*pathological* form of mother's care for *life as a whole*.
 
-In contrast, I believe the gradual variant will make it possible to
-reserve a *healthy* father's care and a *healthy* mother's care for
-*our own offspring* and, instead, provide a *healthy sibling's care*
-towards the wider natural world.
+In contrast, I believe the gradual variant will make it possible for
+us to reserve a *healthy* father's care and a *healthy* mother's care
+for *our own offspring* and, instead, provide a *healthy sibling's
+care* towards the wider natural world.
 
+As I hope to show in this post, the title of this blog post is a pun
+reflecting the main difference between these two trajectories into the
+future.
+
+First, the gradual variant is about putting pressure on life from the
+*sides* and letting it form *itself*. Just like a physical extruder
+makes products by injecting some plastic material under high pressure
+into a mold. 
+
+Except the mold, in this case, will be the Universe itself.
+
+Future, evolved, intelligent life will necesarily evolve under said
+pressure, but it's a *sibling* kind of pressure. That is, it's not a
+pressure that is the result of *conscious influence* from us to them,
+but simply of our continued *presence* on the planet.
+
+Second, the abrupt variant is like putting pressure on life from
+*above* and, thereby, shaping it *in our image*. That is what's
+commonly called (self) directed evolution and I firmly believe that
+would be an existential risk.
+
+Moreover, I believe that to be true, not only for us, but for *all*
+life on Earth. 
+
+Hence, I fear, if we follow that trajectory, we become this big
+festering, hard shell encasing the planet and, from that moment on,
+we'll be faced with the impossible question of what life is allowed to
+pass and what life is not allowed to pass our "filter."
+
+I contend that, not only will we cause billions upon billions of
+co-lateral victims amongst our sibling species, we will, also, face,
+in the end, the inevitable truth that our ways are misguided.
+
+In fact, I predict that the first individual we deem worthy of passing
+our "firewall" will be the first one that can put us out of our
+misery, hence: *death intrusion*.
