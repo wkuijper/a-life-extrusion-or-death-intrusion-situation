@@ -1,4 +1,4 @@
-class ReliefGrid {
+export class ReliefGrid {
 
     /**
 	 * A relief grid is a 2.5 dimensional mesh that is a perturbed
@@ -31,7 +31,7 @@ class ReliefGrid {
 		const heightPlusOne = height + 1;
 		// create vertices
 		const numberOfVertices = heightPlusOne * widthPlusOne;
-		const vertices = new Array[numberOfVertices];
+		const vertices = new Array(numberOfVertices);
 		let vertexIdx = 0;
 		const yOffset = -halfHeight * tileSize;
 		const xOffset = -halfHeight * tileSize;
@@ -46,20 +46,24 @@ class ReliefGrid {
 		}
 		this.vertices = vertices;
 		// create shards
+		console.log("creating shards:");
 		const numberOfShards = height * width;
 		const shards = new Array(numberOfShards);
 		let shardIdx = 0;
 		let nwVertexIdx = 0;
 		let neVertexIdx = 1;
 		let seVertexIdx = widthPlusOne;
-		let swVertex = width;
+		let swVertexIdx = width;
 		for (let v = 0; v < height; v++) {
 			for (let h = 0; h < width; h++) {
 				const nwVertex = vertices[nwVertexIdx];
 				const neVertex = vertices[neVertexIdx];
 				const seVertex = vertices[seVertexIdx];
 				const swVertex = vertices[swVertexIdx];
+				console.log(`[${h}, ${v}]`);
 				const shard = new ReliefShard(this, shardIdx, [h, v], [nwVertex, neVertex, seVertex, swVertex]);
+				shards[shardIdx] = shard;
+				shardIdx++;
 				nwVertexIdx++;
 				neVertexIdx++;
 				seVertexIdx++;
@@ -79,12 +83,13 @@ class ReliefGrid {
 		const numberOfDiagonals = numberOfShards;
 		const numberOfHorizontals = width * heightPlusOne;
 		const numberOfVerticals = height * widthPlusOne;
-		const numnberOfEdges = numberOfDiagonals + numberOfHorizontals + numberOfVerticals;
+		const numberOfEdges = numberOfDiagonals + numberOfHorizontals + numberOfVerticals;
 		const edges = new Array(numberOfEdges);
 		let faceIdx = 0;
 		let halfEdgeIdx = 0;
 		let edgeIdx = 0;
 		for (let shard of shards) {
+			console.log(`${shard}`);
 			const { nwVertex, neVertex, seVertex, swVertex } = shard;
 			/*
 			 *     nw-------ne
@@ -94,7 +99,7 @@ class ReliefGrid {
 			 *     sw-------se
 			 */
 			// anticlockwise winding order
-			const firstFace = new ReliefFace(shard, faceIdx, [nwVertex, seVertex, neVertex]); 
+			const firstFace = new ReliefFace(shard, faceIdx); 
 			faces[faceIdx] = firstFace;
 			faceIdx++;
 			const he11 = new ReliefHalfEdge(halfEdgeIdx, firstFace, [nwVertex, seVertex]);
@@ -109,7 +114,7 @@ class ReliefGrid {
 			he11.nextHalfEdge = he12;
 			he12.nextHalfEdge = he13;
 			he13.nextHalfEdge = he11;
-			const secondFace = new ReliefFace(shard, faceIdx, [nwVertex, swVertex, seVertex]);
+			const secondFace = new ReliefFace(shard, faceIdx);
 			faces[faceIdx] = secondFace;
 			faceIdx++;
 			const he21 = new ReliefHalfEdge(halfEdgeIdx, secondFace, [nwVertex, swVertex]);
@@ -131,21 +136,24 @@ class ReliefGrid {
 			const diagonalEdge = new ReliefEdge(edgeIdx, he11, true);
 			edges[edgeIdx] = diagonalEdge;
 			edgeIdx++;
+			he11.edge = diagonalEdge;
+			he13.edge = diagonalEdge;
 			shard.firstFace = firstFace;
 			shard.secondFace = secondFace;
 		}
 		// go over the horizontal edges and connect them up
-		for (h = 0; h < width; h++) {
+		for (let h = 0; h < width; h++) {
 			const shard = shards[h];
 			const halfEdge = shard.firstFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 			const edge = new ReliefEdge(edgeIdx, halfEdge, false);
-			edges[edgeIdx] = diagonalEdge;
+			edges[edgeIdx] = edge;
 			edgeIdx++;
+			halfEdge.edge = edge;
 		}
 		let shardIdxOffsetAbove = 0;
 		let shardIdxOffsetBelow = width;
-		for (v = 1; v < height; v++) {
-			for (h = 0; h < width; h++) {
+		for (let v = 1; v < height; v++) {
+			for (let h = 0; h < width; h++) {
 				const shardAbove = shards[shardIdxOffsetAbove + h];
 				const shardBelow = shards[shardIdxOffsetBelow + h];
 				const halfEdgeAbove = shardAbove.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
@@ -155,32 +163,36 @@ class ReliefGrid {
 				const edge = new ReliefEdge(edgeIdx, halfEdgeAbove, false);
 				edges[edgeIdx] = edge;
 				edgeIdx++;
+				halfEdgeAbove.edge = edge;
+				halfEdgeBelow.edge = edge;
 			}
 			shardIdxOffsetAbove = shardIdxOffsetBelow;
 			shardIdxOffsetBelow += width;
 		}
 		const shardIdxOffsetBottom = (height-1) * width;
-		for (h = 0; h < width; h++) {
+		for (let h = 0; h < width; h++) {
 			const shard = shards[shardIdxOffsetBottom + h];
 			const halfEdge = shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 			const edge = new ReliefEdge(edgeIdx, halfEdge, false);
-			edges[edgeIdx] = diagonalEdge;
+			edges[edgeIdx] = edge;
 			edgeIdx++;
+			halfEdge.edge = edge;
 		}
 		// go over the vertical edges and connect them up
 		let leftMostShardIdx = 0;
-		for (v = 0; v < height; v++) {
+		for (let v = 0; v < height; v++) {
 			const leftMostShard = shards[leftMostShardIdx];
 			leftMostShardIdx += width;
 			const leftMostHalfEdge = leftMostShard.secondFace.diagonalHalfEdge.nextHalfEdge;
 			const leftMostEdge = new ReliefEdge(edgeIdx, leftMostHalfEdge, false);
 			edges[edgeIdx] = leftMostEdge;
 			edgeIdx++;
+			leftMostHalfEdge.edge = leftMostEdge;
 		}
-		for (h = 1; h < width; h++) {
+		for (let h = 1; h < width; h++) {
 			let shardIdxLeft = h-1;
 			let shardIdxRight = h;
-			for (v = 0; v < height; v++) {
+			for (let v = 0; v < height; v++) {
 				const leftShard = shards[shardIdxLeft];
 				shardIdxLeft += width;
 				const rightShard = shards[shardIdxRight];
@@ -189,20 +201,26 @@ class ReliefGrid {
 				const rightHalfEdge = rightShard.secondFace.diagonalHalfEdge.nextHalfEdge;
 				leftHalfEdge.oppositeHalfEdge = rightHalfEdge;
 				rightHalfEdge.oppositeHalfEdge = leftHalfEdge;
-				const edge = new ReliefEdge(edgeIdx, leftHalfEdge), false);
+				const edge = new ReliefEdge(edgeIdx, leftHalfEdge, false);
 				edges[edgeIdx] = edge;
 				edgeIdx++;
+				leftHalfEdge.edge = edge;
+				rightHalfEdge.edge = edge;
 			}
 		}
 		let rightMostShardIdx = width-1;
-		for (v = 0; v < height; v++) {
+		for (let v = 0; v < height; v++) {
 			const rightMostShard = shards[rightMostShardIdx];
 			rightMostShardIdx += width;
 			const rightMostHalfEdge = rightMostShard.firstFace.diagonalHalfEdge.nextHalfEdge;
 			const rightMostEdge = new ReliefEdge(edgeIdx, rightMostHalfEdge, false);
 			edges[edgeIdx] = rightMostEdge;
 			edgeIdx++;
+			rightMostHalfEdge.edge = rightMostEdge;
 		}
+		this.faces = faces;
+		this.edges = edges;
+		this.halfEdges = halfEdges;
 		// connect vertices to outgoing halfEdges
 		let currShardIdx = 0;
 		for (let v = 0; v < height; v++) {
@@ -212,25 +230,23 @@ class ReliefGrid {
 				if (v === 0) {
 					shard.nwVertex.firstIncomingHalfEdge = 
 						shard.firstFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
+					shard.swVertex.firstIncomingHalfEdge =
+						shard.secondFace.diagonalHalfEdge.nextHalfEdge;
 					if (h === width-1) {
 						shard.neVertex.firstIncomingHalfEdge = 
 							shard.firstFace.diagonalHalfEdge.nextHalfEdge;
 					}
 				} else {
-					if (v < height-1) {
-						shard.nwVertex.firstIncomingHalfEdge = 
-							shard.firstFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
-						if (h === width-1) {
-							shard.neVertex.firstIncomingHalfEdge = 
-								shard.firstFace.diagonalHalfEdge.nextHalfEdge;
-						}			
+					if (h === width-1) {
+						shard.neVertex.firstIncomingHalfEdge =
+							shard.firstFace.diagonalHalfEdge.nextHalfEdge;
+						if (v === height-1) {
+							shard.seVertex.firstIncomingHalfEdge
+								shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
+						}
 					}
-					shard.seVertex.firstIncomingHalfEdge = 
-						shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
-					if (h === 0) {
-						shard.swVertex.firstIncomingHalfEdge = 
-							shard.secondFace.diagonalHalfEdge.nextHalfEdge;
-					}
+					shard.swVertex.firstIncomingHalfEdge = 
+						shard.secondFace.diagonalHalfEdge.nextHalfEdge;
 				}
 			}
 		}
@@ -240,11 +256,42 @@ class ReliefGrid {
 	 * Returns the tile location and ...
 	 */
 	locateShard([x, y]) {
-		
+		// TODO	
+	}
+
+	dump(outputLine, indent) {
+		const nextIndent = indent + "    ";
+		outputLine(indent + "ReliefMesh {");
+		outputLine(indent + "  vertices: [");
+		for (const vertex of this.vertices) {
+			vertex.dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+		outputLine(indent + "  shards: [");
+		for (const shard of this.shards) {
+			shard.dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],");
+		outputLine(indent + "  faces: [");
+		for (const face of this.faces) {
+			face.dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+		outputLine(indent + "  halfEdges: [");
+		for (const halfEdge of this.halfEdges) {
+			halfEdge.dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+		outputLine(indent + "  edges: [");
+		for (const edge of this.edges) {
+			edge.dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+		outputLine(indent + "}");
 	}
 }
 
-class ReliefShard {
+export class ReliefShard {
 
 	/**
 	 * A ReliefShard represents a single perturbed tile in a ReliefGrid. It either
@@ -268,26 +315,29 @@ class ReliefShard {
 		this.secondFace = null;
 	}
 
+	dump(outputLine, indent) {
+		outputLine(indent + `ReliefShard{ idx: ${this.idx}, [h, v]: [${this.h}, ${this.v}], [nwV, neV, seV, swV]: [${this.nwVertex.idx}, ${this.neVertex.idx}, ${this.seVertex.idx}, ${this.swVertex.idx}], flipped: ${this.flipped}, firstFace: ${this?.firstFace.idx}, secondFace: ${this.secondFace?.idx} }`);
+	}
 }
 
-class ReliefFace {
+export class ReliefFace {
 
 	/**
 	 * A ReliefFace represents a single perturbed, triangular face in a 
 	 * ReliefGrid. It is always part of exactly one ReliefShard.
 	 */
-	constructor(shard, idx, [firstVertex, secondVertex, thirdVertex]) {
+	constructor(shard, idx) {
 		this.shard = shard;
 		this.idx = idx;
-		this.firstVertex = firstVertex;
-		this.secondVertex = secondVertex;
-		this.thirdVertex = thirdVertex;
 		this.diagonalHalfEdge = null;
 	}
-	 
+
+	dump(outputLine, indent) {
+		outputLine(indent + `ReliefFace{ idx: ${this.idx}, shard: ${this.shard.idx}, diagonalHalfEdge: ${this.diagonalHalfEdge?.idx}}`);
+	}
 }
 
-class ReliefVertex {
+export class ReliefVertex {
 
 	/**
 	 * A relief vertex represents a single perturbed vertex in a ReliefGrid.
@@ -295,12 +345,22 @@ class ReliefVertex {
 	 * and, through that, it is alway part of at least one and at most eight 
 	 * ReliefFaces.
 	 */
-	constructor(grid, idx, [h, v]) {
-		this.grid
+	constructor(grid, idx, [h, v], [baseX, baseY]) {
+		this.grid = grid;
+		this.idx = idx;
+		this.h = h;
+		this.v = v;
+		this.baseX = baseX;
+		this.baseY = baseY;
+		this.firstIncomingHalfEdge = null;
+	}
+
+	dump(outputLine, indent) {
+		outputLine(indent + `ReliefVertex{ idx: ${this.idx}, [h, v]: [${this.h}, ${this.v}], [baseX, baseY]: [${this.baseX}, ${this.baseY}], firstIncomingHalfEdge: ${this.firstIncomingHalfEdge?.idx}}`);
 	}
 }
 
-class ReliefEdge {
+export class ReliefEdge {
 
 	/**
 	 * A ReliefEdge is an undirected edge associated to 1 or 2 ReliefFaces.
@@ -313,24 +373,32 @@ class ReliefEdge {
 		this.someHalfEdge = someHalfEdge;
 		this.isDiagonal = isDiagonal;
 	}
+
+	dump(outputLine, indent) {
+		outputLine(indent + `ReliefEdge{ idx: ${this.idx}, someHalfEdge: [${this.someHalfEdge?.idx}, isDiagonal: ${this.isDiagonal}}`);
+	}
 }
 
-class ReliefHalfEdge {
+export class ReliefHalfEdge {
 
 	/**
 	 * A ReliefHalfEdge is a directed edge associated to 1 ReliefFace.
-	 * It also stores the normal for the sourceVertex of the associated
+	 * It also stores the normal for the targetVertex of the associated
 	 * face (note that a single vertex will have multiple adjacent faces
-	 * and each will have its own normal for that vertex)
+	 * and each will have its own normal associated to that vertex)
 	 */
 	constructor(idx, reliefFace, [sourceVertex, targetVertex]) {
 		this.idx = idx;
-		this.reliefFace = reliefFace;
+		this.face = reliefFace;
 		this.sourceVertex = sourceVertex;
 		this.targetVertex = targetVertex;
-		this.sourceVertexFaceNormal = [0, 0, 1];
+		this.targetVertexFaceNormal = [0, 0, 1];
 		this.nextHalfEdge = null;
 		this.oppositeHalfEdge = null;
 		this.edge = null;
+	}
+	
+	dump(outputLine, indent) {
+		outputLine(indent + `ReliefHalfEdge{ idx: ${this.idx}, face: [${this.face.idx}, sourceVertex: ${this.sourceVertex.idx}, targetVertex: ${this.targetVertex.idx}, targetVertexFaceNormal: ${JSON.stringify(this.targetVertexFaceNormal)}, nextHalfEdge: ${this.nextHalfEdge?.idx}, oppositeHalfEdge: ${this.oppositeHalfEdge?.idx}, edge: ${this.edge?.idx}}`);
 	}
 }
