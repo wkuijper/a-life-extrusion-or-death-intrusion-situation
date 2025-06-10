@@ -34,11 +34,11 @@ export class ReliefGrid {
 		const vertices = new Array(numberOfVertices);
 		let vertexIdx = 0;
 		const yOffset = -halfHeight * tileSize;
-		const xOffset = -halfHeight * tileSize;
+		const xOffset = -halfWidth * tileSize;
 		for (let v = 0; v < heightPlusOne; v++) {
 			const y = yOffset + v * tileSize;
 			for (let h = 0; h < widthPlusOne; h++) {
-				const x = xOffset + v * tileSize;
+				const x = xOffset + h * tileSize;
 				const vertex = new ReliefVertex(this, vertexIdx, [h, v], [x, y])
 				vertices[vertexIdx] = vertex;
 				vertexIdx++;
@@ -46,21 +46,19 @@ export class ReliefGrid {
 		}
 		this.vertices = vertices;
 		// create shards
-		console.log("creating shards:");
 		const numberOfShards = height * width;
 		const shards = new Array(numberOfShards);
 		let shardIdx = 0;
 		let nwVertexIdx = 0;
 		let neVertexIdx = 1;
-		let seVertexIdx = widthPlusOne;
-		let swVertexIdx = width;
+		let seVertexIdx = widthPlusOne+1;
+		let swVertexIdx = widthPlusOne;
 		for (let v = 0; v < height; v++) {
 			for (let h = 0; h < width; h++) {
 				const nwVertex = vertices[nwVertexIdx];
 				const neVertex = vertices[neVertexIdx];
 				const seVertex = vertices[seVertexIdx];
 				const swVertex = vertices[swVertexIdx];
-				console.log(`[${h}, ${v}]`);
 				const shard = new ReliefShard(this, shardIdx, [h, v], [nwVertex, neVertex, seVertex, swVertex]);
 				shards[shardIdx] = shard;
 				shardIdx++;
@@ -89,7 +87,6 @@ export class ReliefGrid {
 		let halfEdgeIdx = 0;
 		let edgeIdx = 0;
 		for (let shard of shards) {
-			console.log(`${shard}`);
 			const { nwVertex, neVertex, seVertex, swVertex } = shard;
 			/*
 			 *     nw-------ne
@@ -137,7 +134,7 @@ export class ReliefGrid {
 			edges[edgeIdx] = diagonalEdge;
 			edgeIdx++;
 			he11.edge = diagonalEdge;
-			he13.edge = diagonalEdge;
+			he23.edge = diagonalEdge;
 			shard.firstFace = firstFace;
 			shard.secondFace = secondFace;
 		}
@@ -237,16 +234,16 @@ export class ReliefGrid {
 							shard.firstFace.diagonalHalfEdge.nextHalfEdge;
 					}
 				} else {
+					if (h === 0) {
+						shard.swVertex.firstIncomingHalfEdge = 
+							shard.secondFace.diagonalHalfEdge.nextHalfEdge;
+					}
+					shard.seVertex.firstIncomingHalfEdge =
+						shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 					if (h === width-1) {
 						shard.neVertex.firstIncomingHalfEdge =
 							shard.firstFace.diagonalHalfEdge.nextHalfEdge;
-						if (v === height-1) {
-							shard.seVertex.firstIncomingHalfEdge
-								shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
-						}
 					}
-					shard.swVertex.firstIncomingHalfEdge = 
-						shard.secondFace.diagonalHalfEdge.nextHalfEdge;
 				}
 			}
 		}
@@ -287,6 +284,47 @@ export class ReliefGrid {
 			edge.dump(outputLine, nextIndent);
 		}
 		outputLine(indent + "  ],")
+		outputLine(indent + "}");
+	}
+
+	dumpGraphviz(outputLine, indent) {
+		const nextIndent = indent + "    ";
+		outputLine(indent + `digraph "ReliefMesh" {`);
+		for (const vertex of this.vertices) {
+			vertex.dumpGraphviz(outputLine, nextIndent);
+		}
+		for (const face of this.faces) {
+			face.dumpGraphviz(outputLine, nextIndent);
+		}
+		for (const halfEdge of this.halfEdges) {
+			halfEdge.dumpGraphviz(outputLine, nextIndent);
+		}
+		for (const vertex of this.vertices) {
+			const firstIncomingHalfEdge = vertex.firstIncomingHalfEdge;
+			if (firstIncomingHalfEdge !== null) {
+				outputLine(nextIndent + `v${vertex.idx} -> h${firstIncomingHalfEdge.idx} [label="f"];`);
+			}
+		}
+		for (const face of this.faces) {
+			const diagonalHalfEdge = face.diagonalHalfEdge;
+			if (diagonalHalfEdge !== null) {
+				outputLine(nextIndent + `f${face.idx} -> h${diagonalHalfEdge.idx} [label="d"];`);
+			}
+		}
+		for (const halfEdge of this.halfEdges) {
+			const nextHalfEdge = halfEdge.nextHalfEdge;
+			if (nextHalfEdge !== null) {
+				outputLine(nextIndent + `h${halfEdge.idx} -> h${nextHalfEdge.idx} [label="n"];`);
+			}
+			const oppositeHalfEdge = halfEdge.oppositeHalfEdge;
+			if (oppositeHalfEdge !== null) {
+				outputLine(nextIndent + `h${halfEdge.idx} -> h${oppositeHalfEdge.idx} [label="o"];`);
+			}
+			const face = halfEdge.face;
+			if (face !== null) {
+				outputLine(nextIndent + `h${halfEdge.idx} -> f${face.idx} [label="f"];`);
+			}
+		}
 		outputLine(indent + "}");
 	}
 }
@@ -333,7 +371,11 @@ export class ReliefFace {
 	}
 
 	dump(outputLine, indent) {
-		outputLine(indent + `ReliefFace{ idx: ${this.idx}, shard: ${this.shard.idx}, diagonalHalfEdge: ${this.diagonalHalfEdge?.idx}}`);
+		outputLine(indent + `ReliefFace{ idx: ${this.idx}, shard: ${this.shard.idx}, diagonalHalfEdge: ${this.diagonalHalfEdge?.idx} }`);
+	}
+	
+	dumpGraphviz(outputLine, indent) {
+		outputLine(indent + `f${this.idx} [label="${this.idx}", shape="triangle"];`);
 	}
 }
 
@@ -356,7 +398,24 @@ export class ReliefVertex {
 	}
 
 	dump(outputLine, indent) {
-		outputLine(indent + `ReliefVertex{ idx: ${this.idx}, [h, v]: [${this.h}, ${this.v}], [baseX, baseY]: [${this.baseX}, ${this.baseY}], firstIncomingHalfEdge: ${this.firstIncomingHalfEdge?.idx}}`);
+		const incomingHalfEdgeIdxs = [];
+		for (const incomingHalfEdge of this.incomingHalfEdges()) {
+			incomingHalfEdgeIdxs.push(incomingHalfEdge.idx);
+		}
+		outputLine(indent + `ReliefVertex{ idx: ${this.idx}, [h, v]: [${this.h}, ${this.v}], [baseX, baseY]: [${this.baseX}, ${this.baseY}], firstIncomingHalfEdge: ${this.firstIncomingHalfEdge?.idx}, incomingHalfEdges: ${JSON.stringify(incomingHalfEdgeIdxs)} }`);
+	}
+
+	dumpGraphviz(outputLine, indent) {
+		outputLine(indent + `v${this.idx} [label="${this.idx}", shape="circle"];`);
+	}
+
+	*incomingHalfEdges() {
+		const firstIncomingHalfEdge = this.firstIncomingHalfEdge;
+		let incomingHalfEdge = firstIncomingHalfEdge;
+		do {
+			yield incomingHalfEdge;
+			incomingHalfEdge = incomingHalfEdge.nextHalfEdge.oppositeHalfEdge;
+		} while (incomingHalfEdge !== null && incomingHalfEdge !== firstIncomingHalfEdge);
 	}
 }
 
@@ -375,7 +434,7 @@ export class ReliefEdge {
 	}
 
 	dump(outputLine, indent) {
-		outputLine(indent + `ReliefEdge{ idx: ${this.idx}, someHalfEdge: [${this.someHalfEdge?.idx}, isDiagonal: ${this.isDiagonal}}`);
+		outputLine(indent + `ReliefEdge{ idx: ${this.idx}, someHalfEdge: ${this.someHalfEdge?.idx}, isDiagonal: ${this.isDiagonal} }`);
 	}
 }
 
@@ -399,6 +458,10 @@ export class ReliefHalfEdge {
 	}
 	
 	dump(outputLine, indent) {
-		outputLine(indent + `ReliefHalfEdge{ idx: ${this.idx}, face: [${this.face.idx}, sourceVertex: ${this.sourceVertex.idx}, targetVertex: ${this.targetVertex.idx}, targetVertexFaceNormal: ${JSON.stringify(this.targetVertexFaceNormal)}, nextHalfEdge: ${this.nextHalfEdge?.idx}, oppositeHalfEdge: ${this.oppositeHalfEdge?.idx}, edge: ${this.edge?.idx}}`);
+		outputLine(indent + `ReliefHalfEdge{ idx: ${this.idx}, face: [${this.face.idx}, sourceVertex: ${this.sourceVertex.idx}, targetVertex: ${this.targetVertex.idx}, targetVertexFaceNormal: ${JSON.stringify(this.targetVertexFaceNormal)}, nextHalfEdge: ${this.nextHalfEdge?.idx}, oppositeHalfEdge: ${this.oppositeHalfEdge?.idx}, edge: ${this.edge?.idx} }`);
+	}
+	
+	dumpGraphviz(outputLine, indent) {
+		outputLine(indent + `h${this.idx} [label="${this.idx}", shape="box"];`);
 	}
 }
