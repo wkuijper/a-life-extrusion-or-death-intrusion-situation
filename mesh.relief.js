@@ -27,8 +27,11 @@ export class ReliefGrid {
         this.width = width;
 		this.height = height;
 		this.tileSize = tileSize;
+		this.maxAllowedShift = .4999 * tileSize;
 		const widthPlusOne = width + 1;
 		const heightPlusOne = height + 1;
+		this.widthPlusOne = widthPlusOne;
+		this.heightPlusOne = heightPlusOne;
 		// create vertices
 		const numberOfVertices = heightPlusOne * widthPlusOne;
 		const vertices = new Array(numberOfVertices);
@@ -250,10 +253,49 @@ export class ReliefGrid {
 	}
 
 	/**
-	 * Returns the tile location and ...
+	 * Returns the face that intersects the vertical through [x, y]
+	 * or null in case the coordinate is out of bounds for the mesh.
 	 */
-	locateShard([x, y]) {
-		// TODO	
+	locateFaceForVertical([x, y]) {
+		const h = Math.floor(x / this.tileSize) + this.halfWidth;
+		const v = Math.floor(y / this.tileSize) + this.halfHeight;
+		if (h < -1
+		    || h > this.widthPlusOne
+		    || v < -1
+		    || v > this.heightPlusOne) {
+			return null;			
+		}
+		const width = this.width;
+		const height = this.height;
+		const shards = this.shards;
+		for (let dv = -1; dv <= 1; dv++) {
+			const vv = v + dv;
+			if (vv < 0 || vv >= height) {
+				continue;
+			}
+			const vvOffset = vv * width;
+			for (let dh = -1; dh <= 1; dh++) {
+				const hh = h + dh;
+				if (hh < 0 || hh >= width) {
+					continue;
+				}
+				const shard = shards[vvOffset + hh];
+				for (const face of shard.faces()) {
+					const he0 = face.diagonalHalfEdge;
+					const he1 = he0.nextHalfEdge;
+					const he2 = he1.nextHalfEdge;
+					const [x0, y0, _z0] = he0.sourceVertex.getShiftedPosition();
+					const [x1, y1, _z1] = he1.sourceVertex.getShiftedPosition();
+					const [x2, y2, _z2] = he2.sourceVertex.getShiftedPosition();
+					console.log(`[${x}, ${y}] checking: [${x0}, ${y0}] -> [${x1}, ${y1}] -> [${x2}, ${y2}]`);
+					if (face.intersectsVertical([x, y])) {
+						console.log("match!");
+						return face;
+					}
+				}
+			}
+		}
+		return null;
 	}
 
 	dump(outputLine, indent) {
@@ -356,6 +398,67 @@ export class ReliefShard {
 	dump(outputLine, indent) {
 		outputLine(indent + `ReliefShard{ idx: ${this.idx}, [h, v]: [${this.h}, ${this.v}], [nwV, neV, seV, swV]: [${this.nwVertex.idx}, ${this.neVertex.idx}, ${this.seVertex.idx}, ${this.swVertex.idx}], flipped: ${this.flipped}, firstFace: ${this?.firstFace.idx}, secondFace: ${this.secondFace?.idx} }`);
 	}
+
+	setFlipped(flipped) {
+		if (flipped !== this.flipped) {
+			this.flip();
+		}
+	}
+	
+	flip() {
+		if (!flipped) {
+			const firstFace = this.firstFace;
+			const secondFace = this.secondFace;
+			
+			const he11 = firstFace.diagonalHalfEdge;
+			const he12 = he11.nextHalfEdge;
+			const he13 = he12.nextHalfEdge;
+			const he23 = secondFace.diagonalHalfEdge;
+			const he21 = he23.nextHalfEdge;
+			const he22 = he21.nextHalfEdge;
+
+			he21.face = firstFace;
+			he12.face = secondFace;
+
+			he11.nextHalfEdge = he13;
+			he13.nextHalfEdge = he21;
+			he21.nextHalfEdge = he11;
+
+			he23.nextHalfEdge = he22;
+			he22.nextHalfEdge = he12;
+			he12.nextHalfEdge = he23;
+
+			this.flipped = true;
+		} else {
+			const firstFace = this.firstFace;
+			const secondFace = this.secondFace;
+			
+			const he11 = firstFace.diagonalHalfEdge;
+			const he13 = he11.nextHalfEdge;
+			const he21 = he13.nextHalfEdge;
+			const he23 = secondFace.diagonalHalfEdge;
+			const he22 = he23.nextHalfEdge;
+			const he12 = he22.nextHalfEdge;
+
+			he12.face = firstFace;
+			he21.face = secondFace;
+
+			he11.nextHalfEdge = he12;
+			he12.nextHalfEdge = he13;
+			he13.nextHalfEdge = he11;
+
+			he23.nextHalfEdge = he21;
+			he21.nextHalfEdge = he22;
+			he22.nextHalfEdge = he23;
+			
+			this.flipped = false;
+		}
+	}
+
+	*faces() {
+		yield this.firstFace;
+		yield this.secondFace;
+	}
 }
 
 export class ReliefFace {
@@ -377,12 +480,28 @@ export class ReliefFace {
 	dumpGraphviz(outputLine, indent) {
 		outputLine(indent + `f${this.idx} [label="${this.idx}", shape="triangle"];`);
 	}
+
+	intersectsVertical([x, y]) {
+		let halfEdge = this.diagonalHalfEdge;
+		if (!halfEdge.rightOfOrOnVertical([x, y])) {
+			return false;
+		}
+		halfEdge = halfEdge.nextHalfEdge;
+		if (!halfEdge.rightOfOrOnVertical([x, y])) {
+			return false;
+		}
+		halfEdge = halfEdge.nextHalfEdge;
+		if (!halfEdge.rightOfOrOnVertical([x, y])) {
+			return false;
+		}
+		return true;
+	}
 }
 
 export class ReliefVertex {
 
 	/**
-	 * A relief vertex represents a single perturbed vertex in a ReliefGrid.
+	 * A relief vertex represents a single, shifted vertex in a ReliefGrid.
 	 * It is always part of at least one, and at most four, ReliefShards, 
 	 * and, through that, it is alway part of at least one and at most eight 
 	 * ReliefFaces.
@@ -394,7 +513,13 @@ export class ReliefVertex {
 		this.v = v;
 		this.baseX = baseX;
 		this.baseY = baseY;
-		this.firstIncomingHalfEdge = null;
+		this.shiftX = 0;
+		this.shiftY = 0;
+		this.shiftZ = 0;
+		this.shiftedX = baseX;
+		this.shiftedY = baseY;
+		this.shiftedZ = 0;
+		this.firstIncomingHalfEdge = null; // invariant: this halfedge will never be a diagonal
 	}
 
 	dump(outputLine, indent) {
@@ -416,6 +541,26 @@ export class ReliefVertex {
 			yield incomingHalfEdge;
 			incomingHalfEdge = incomingHalfEdge.nextHalfEdge.oppositeHalfEdge;
 		} while (incomingHalfEdge !== null && incomingHalfEdge !== firstIncomingHalfEdge);
+	}
+
+	getShiftedPosition() {
+		return [this.shiftedX, this.shiftedY, this.shiftedZ];
+	}
+
+	setShift([shiftX, shiftY, shiftZ]) {
+		const maxAllowedShift = this.grid.maxAllowedShift;
+		if (shiftX < -maxAllowedShift ||
+			   shiftX > maxAllowedShift ||
+			   shiftY < -maxAllowedShift ||
+			   shiftY > maxAllowedShift ) {
+			throw new Error("maximal allowed shift exceeded");
+		}
+		this.shiftX = shiftX;
+		this.shiftY = shiftY;
+		this.shiftZ = shiftZ;
+		this.shiftedX = this.baseX + shiftX;
+		this.shiftedY = this.baseY + shiftY;
+		this.shiftedZ = shiftZ;
 	}
 }
 
@@ -463,5 +608,11 @@ export class ReliefHalfEdge {
 	
 	dumpGraphviz(outputLine, indent) {
 		outputLine(indent + `h${this.idx} [label="${this.idx}", shape="box"];`);
+	}
+
+	rightOfOrOnVertical([x, y]) {
+		const [sx, sy, _sz] = this.sourceVertex.getShiftedPosition();
+		const [tx, ty, _tz] = this.targetVertex.getShiftedPosition();
+		return (tx - sx) * (y - sy) - (ty - sy) * (x - sx) <= 0;
 	}
 }
