@@ -19,12 +19,8 @@ export class ReliefGrid {
 	 *   This, in turn, greatly simplifies (and speeds up) things like point
 	 *   location and incremental updates.
 	 */
-    constructor(halfWidth, halfHeight, tileSize) {
-		this.halfWidth = halfWidth;
-		this.halfHeight = halfHeight;
-		const width = halfWidth * 2;
-		const height = halfHeight * 2;
-        this.width = width;
+    constructor(width, height, tileSize) {
+		this.width = width;
 		this.height = height;
 		this.tileSize = tileSize;
 		this.maxAllowedShift = .4999 * tileSize;
@@ -36,12 +32,10 @@ export class ReliefGrid {
 		const numberOfVertices = heightPlusOne * widthPlusOne;
 		const vertices = new Array(numberOfVertices);
 		let vertexIdx = 0;
-		const yOffset = -halfHeight * tileSize;
-		const xOffset = -halfWidth * tileSize;
 		for (let v = 0; v < heightPlusOne; v++) {
-			const y = yOffset + v * tileSize;
+			const y = v * tileSize;
 			for (let h = 0; h < widthPlusOne; h++) {
-				const x = xOffset + h * tileSize;
+				const x = h * tileSize;
 				const vertex = new ReliefVertex(this, vertexIdx, [h, v], [x, y])
 				vertices[vertexIdx] = vertex;
 				vertexIdx++;
@@ -232,22 +226,20 @@ export class ReliefGrid {
 						shard.firstFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 					shard.swVertex.firstIncomingHalfEdge =
 						shard.secondFace.diagonalHalfEdge.nextHalfEdge;
-					if (h === width-1) {
-						shard.neVertex.firstIncomingHalfEdge = 
-							shard.firstFace.diagonalHalfEdge.nextHalfEdge;
-					}
-				} else {
-					if (h === 0) {
-						shard.swVertex.firstIncomingHalfEdge = 
-							shard.secondFace.diagonalHalfEdge.nextHalfEdge;
-					}
-					shard.seVertex.firstIncomingHalfEdge =
-						shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
-					if (h === width-1) {
-						shard.neVertex.firstIncomingHalfEdge =
-							shard.firstFace.diagonalHalfEdge.nextHalfEdge;
-					}
+				} 
+				if (h === width-1) {
+					shard.neVertex.firstIncomingHalfEdge =
+						shard.firstFace.diagonalHalfEdge.nextHalfEdge;
 				}
+				if (height > 1) {
+					continue;
+				}
+				if (h === 0) {
+					shard.swVertex.firstIncomingHalfEdge = 
+						shard.secondFace.diagonalHalfEdge.nextHalfEdge;
+				}
+				shard.seVertex.firstIncomingHalfEdge =
+					shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 			}
 		}
 		// set up change listener infrastructure
@@ -261,8 +253,8 @@ export class ReliefGrid {
 	 * or null in case the coordinate is out of bounds for the mesh.
 	 */
 	locateFaceForVertical([x, y]) {
-		const h = Math.floor(x / this.tileSize) + this.halfWidth;
-		const v = Math.floor(y / this.tileSize) + this.halfHeight;
+		const h = Math.floor(x / this.tileSize);
+		const v = Math.floor(y / this.tileSize);
 		if (h < -1
 		    || h > this.widthPlusOne
 		    || v < -1
@@ -564,6 +556,10 @@ export class ReliefVertex {
 	}
 
 	*incomingHalfEdges() {
+		if (this.firstIncomingHalfEdge === null) {
+			// special case: empty mesh
+			return;
+		}
 		const firstIncomingHalfEdge = this.firstIncomingHalfEdge;
 		let incomingHalfEdge = firstIncomingHalfEdge;
 		do {
