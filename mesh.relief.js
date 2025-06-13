@@ -19,7 +19,7 @@ export class ReliefGrid {
 	 *   This, in turn, greatly simplifies (and speeds up) things like point
 	 *   location and incremental updates.
 	 */
-    constructor (halfWidth, halfHeight, tileSize) {
+    constructor(halfWidth, halfHeight, tileSize) {
 		this.halfWidth = halfWidth;
 		this.halfHeight = halfHeight;
 		const width = halfWidth * 2;
@@ -250,10 +250,14 @@ export class ReliefGrid {
 				}
 			}
 		}
+		// set up change listener infrastructure
+		this.changeListeners = [];
+		this.changedVertices = [];
+		this.changedFaces = [];
 	}
 
 	/**
-	 * Returns the face that intersects the vertical through [x, y]
+	 * Returns a face that intersects the vertical through [x, y]
 	 * or null in case the coordinate is out of bounds for the mesh.
 	 */
 	locateFaceForVertical([x, y]) {
@@ -369,6 +373,20 @@ export class ReliefGrid {
 		}
 		outputLine(indent + "}");
 	}
+
+	notifyChangeListeners() {
+		const changeEvent = {
+			changedFaceVertices: this.changedFaceVertices,
+			changedFaceIndices: this.changedFaceIndices,
+			changedFaceNormals: this.changedFaceNormals,
+		}
+		for (const changeListener of changeListeners) {
+			changeListener(changeEvent);
+		}
+		this.changedVertices.length = 0;
+		this.changedFaceIndices.length = 0;
+		this.changedFaceNormals.length = 0;
+	}
 }
 
 export class ReliefShard {
@@ -406,7 +424,7 @@ export class ReliefShard {
 	}
 	
 	flip() {
-		if (!flipped) {
+		if (!this.flipped) {
 			const firstFace = this.firstFace;
 			const secondFace = this.secondFace;
 			
@@ -417,6 +435,16 @@ export class ReliefShard {
 			const he21 = he23.nextHalfEdge;
 			const he22 = he21.nextHalfEdge;
 
+			const nw = he23.targetVertex;
+			const se = he11.targetVertex;
+			const sw = he21.targetVertex;
+			const ne = he12.targetVertex;
+			
+			he11.sourceVertex = sw;
+			he11.targetVertex = ne;
+			he23.sourceVertex = ne;
+			he23.targetVertex = sw;
+				
 			he21.face = firstFace;
 			he12.face = secondFace;
 
@@ -520,6 +548,7 @@ export class ReliefVertex {
 		this.shiftedY = baseY;
 		this.shiftedZ = 0;
 		this.firstIncomingHalfEdge = null; // invariant: this halfedge will never be a diagonal
+		this.inChangedList = false;
 	}
 
 	dump(outputLine, indent) {
@@ -555,14 +584,32 @@ export class ReliefVertex {
 			   shiftY > maxAllowedShift ) {
 			throw new Error("maximal allowed shift exceeded");
 		}
-		this.shiftX = shiftX;
-		this.shiftY = shiftY;
-		this.shiftZ = shiftZ;
+		if (this.shiftX !== shiftX) {
+			this.shiftX = shiftX;
+			this.reportAsChanged();
+		}
+		if (this.shiftY !== shiftY) {
+			this.shiftY = shiftY;
+			this.reportAsChanged();
+		}
+		if (this.shiftZ !== shiftZ) {
+			this.shiftZ = shiftZ;
+			this.reportAsChanged();
+		}
 		this.shiftedX = this.baseX + shiftX;
 		this.shiftedY = this.baseY + shiftY;
 		this.shiftedZ = shiftZ;
 	}
+
+	reportAsChanged() {
+		if (this.inChangedList) {
+			return;
+		}
+		this.grid.changedVertices.push(this);
+		this.inChangedList = true;
+	}
 }
+
 
 export class ReliefEdge {
 
