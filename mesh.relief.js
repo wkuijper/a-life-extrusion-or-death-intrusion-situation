@@ -231,15 +231,14 @@ export class ReliefGrid {
 					shard.neVertex.firstIncomingHalfEdge =
 						shard.firstFace.diagonalHalfEdge.nextHalfEdge;
 				}
-				if (height > 1) {
-					continue;
+				if (v > 0 || height === 1) {
+					if (h === 0) {
+						shard.swVertex.firstIncomingHalfEdge = 
+							shard.secondFace.diagonalHalfEdge.nextHalfEdge;
+					}
+					shard.seVertex.firstIncomingHalfEdge =
+						shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 				}
-				if (h === 0) {
-					shard.swVertex.firstIncomingHalfEdge = 
-						shard.secondFace.diagonalHalfEdge.nextHalfEdge;
-				}
-				shard.seVertex.firstIncomingHalfEdge =
-					shard.secondFace.diagonalHalfEdge.nextHalfEdge.nextHalfEdge;
 			}
 		}
 		// set up change listener infrastructure
