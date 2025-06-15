@@ -378,6 +378,27 @@ export class ReliefGrid {
 		this.changedFaceIndices.length = 0;
 		this.changedFaceNormals.length = 0;
 	}
+
+	boundingBox() {
+		let [minX, minY] = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+		let [maxX, maxY] = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+		for (const vertex of this.vertices) {
+			const [x, y] = vertex.getShiftedPosition();
+			if (x < minX) {
+				minX = x;
+			}
+			if (x > maxX) {
+				maxX = x;
+			}
+			if (y < minY) {
+				minY = y;
+			}
+			if (y > maxY) {
+				maxY = y;
+			}
+		}
+		return [minX, minY, maxX, maxY];
+	}
 }
 
 export class ReliefShard {
@@ -514,6 +535,28 @@ export class ReliefFace {
 			return false;
 		}
 		return true;
+	}
+
+	getHalfEdges() {
+		const he1 = this.diagonalHalfEdge;
+		const he2 = he1.nextHalfEdge;
+		const he3 = he2.nextHalfEdge;
+		return [he1, he2, he3];
+	}
+	
+	getVertices() {
+		const [he1, he2, he3] = this.getHalfEdges();
+		return [he1.targetVertex, he2.targetVertex, he3.targetVertex];
+	}
+	
+	getShiftedPositions() {
+		const [v1, v2, v3] = this.getVertices();
+		return [v1.getShiftedPosition(), v2.getShiftedPosition(), v3.getShiftedPosition()];
+	}
+
+	getShiftedMedianPosition() {
+		const [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3]] = this.getShiftedPositions();
+		return [(x1 + x2 + x3) / 3, (y1 + y2 + y3) / 3, (z1 + z2 + z3) / 3];
 	}
 }
 

@@ -1,9 +1,11 @@
 import { ReliefGrid } from "./mesh.relief.js";
 
 export function test(report) {
+    report.startSection("Mesh Relief Tests");
+    
     report.startSection("Test 0: Empty Mesh");
     test0(report);  
-    report.endSection("Test 0");
+    report.endSection("Test 0", "3316a98e2a454484f69911f2fad494a57b710550f2ef99b83db846242df05d81");
     
     report.startSection("Test 1: Single Tile Mesh");
     test1(report);
@@ -20,8 +22,77 @@ export function test(report) {
     report.startSection("Test 4: 4x4 Mesh");
     test4(report);
     report.endSection("Test 4");
+    
+    report.endSection("Mesh Relief Tests");
 }
 
+function drawReliefMesh(report, reliefMesh) {
+    const tileSize = reliefMesh.tileSize;
+    const scale = 200 / tileSize;
+    const fontSize = Math.round(.075 * tileSize * scale);
+    const margin = 2 * fontSize;
+    
+    const [minX, minY, maxX, maxY] = reliefMesh.boundingBox();
+    const bbWidth = maxX - minX;
+    const bbHeight = maxY - minY;
+     
+    const canvas = report.createCanvas(Math.round(bbWidth * scale) + 2 * margin, 
+                                       Math.round(bbHeight * scale) + 2 * margin);
+
+    const offsetX = (-minX * scale) + margin;
+    const offsetY = (-minY * scale) + margin;
+    
+    const ctx = canvas.getContext("2d");
+
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    
+    for (const halfEdge of reliefMesh.halfEdges) {
+        const sourceVertex = halfEdge.sourceVertex;
+        const targetVertex = halfEdge.targetVertex;
+        const [sx, sy] = sourceVertex.getShiftedPosition();
+        const [sxx, syy] = [offsetX + sx * scale, offsetY + sy * scale];
+        const [tx, ty] = targetVertex.getShiftedPosition();
+        const [txx, tyy] = [offsetX + tx * scale, offsetY + ty * scale];
+        ctx.beginPath();
+        ctx.moveTo(sxx, syy);
+        ctx.lineTo(txx, tyy);
+        ctx.stroke();
+        const dxx = (txx - sxx);
+        const dyy = (tyy - syy);
+        const pxx = -dyy;
+        const pyy = dxx;
+        const norm = Math.sqrt(pxx * pxx + pyy * pyy);
+        const nxx = pxx / norm;
+        const nyy = pyy / norm;
+        const mxx = (sxx + txx) / 2;
+        const myy = (syy + tyy) / 2;
+        const lxx = mxx - (nxx * fontSize);
+        const lyy = myy - (nyy * fontSize);
+        ctx.fillStyle = "black";
+        ctx.fillText(`${halfEdge.idx}`, lxx, lyy);  
+    }
+    
+    for (const vertex of reliefMesh.vertices) {
+        const [x, y] = vertex.getShiftedPosition();
+        const [xx, yy] = [offsetX + x * scale, offsetY + y * scale];
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.rect(xx - fontSize, yy - fontSize, 2 * fontSize, 2 * fontSize);
+        ctx.fill();
+        ctx.fillStyle = "black";
+        ctx.fillText(`${vertex.idx}`, xx, yy);        
+    }
+
+    for (const face of reliefMesh.faces) {
+        const [x, y] = face.getShiftedMedianPosition();
+        const [xx, yy] = [offsetX + x * scale, offsetY + y * scale];
+        ctx.fillStyle = "black";
+        ctx.fillText(`${face.idx}`, xx, yy);        
+    }
+    report.logImage(canvas.toDataURL());
+}
 export function test0(report) {
     const outputLine = report.outputLine;
     const prefix = "";
@@ -35,11 +106,22 @@ export function test1(report) {
     const outputLine = report.outputLine;
     const prefix = "";
     const reliefMesh1x1 = new ReliefGrid(1, 1, 10);
+    report.startSection("Unflipped");
+    report.startSection("Dump");
     reliefMesh1x1.dump(outputLine, prefix);
+    report.endSection("Dump");
+    
+    drawReliefMesh(report, reliefMesh1x1);
+    report.endSection("Unflipped");
+    report.startSection("Flipped");
     const intersectFace1 = reliefMesh1x1.locateFaceForVertical([2, 5]);
     intersectFace1.dump(outputLine, prefix + "intersectFace1 === ")
     intersectFace1.shard.flip();
+    report.startSection("dump");
     reliefMesh1x1.dump(outputLine, prefix + "1> ");
+    report.endSection("dump");
+    drawReliefMesh(report, reliefMesh1x1);
+    report.endSection("Flipped");
 }
 
 export function test2(report) {
@@ -47,6 +129,7 @@ export function test2(report) {
     const prefix = "";
     const reliefMesh2x2 = new ReliefGrid(2, 2, 10);
     reliefMesh2x2.dump(outputLine, prefix);
+    drawReliefMesh(report, reliefMesh2x2);
     const intersectFace1 = reliefMesh2x2.locateFaceForVertical([18, 12]);
     intersectFace1.dump(outputLine, prefix + "intersectFace1: ")
     intersectFace1.shard.flip();
@@ -62,6 +145,7 @@ export function test3(report) {
     const prefix = "";
     const reliefMesh3x3 = new ReliefGrid(3, 3, 10);
     reliefMesh3x3.dump(outputLine, prefix);
+    drawReliefMesh(report, reliefMesh3x3);
     const intersectFace1 = reliefMesh3x3.locateFaceForVertical([19, 22]);
     intersectFace1.dump(outputLine, prefix + "intersectFace1: ");
     intersectFace1.shard.flip();
@@ -79,6 +163,7 @@ export function test4(report) {
     const prefix = "";
     const reliefMesh4x4 = new ReliefGrid(4, 4, 10);
     reliefMesh4x4.dump(outputLine, prefix);
+    drawReliefMesh(report, reliefMesh4x4);
     const intersectFace1 = reliefMesh4x4.locateFaceForVertical([19, 22]);
     intersectFace1.dump(outputLine, prefix + "intersectFace1: ");
     intersectFace1.shard.flip();
