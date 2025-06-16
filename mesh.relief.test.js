@@ -1,29 +1,25 @@
 import { ReliefGrid } from "./mesh.relief.js";
 
 export function test(report) {
-    report.startSection("Mesh Relief Tests");
-    
-    report.startSection("Test 0: Empty Mesh");
+    report.startSection("test0", "Test 0: Empty Mesh", "3316a98e2a454484f69911f2fad494a57b710550f2ef99b83db846242df05d81");
     test0(report);  
-    report.endSection("Test 0", "3316a98e2a454484f69911f2fad494a57b710550f2ef99b83db846242df05d81");
+    report.endSection("test0");
     
-    report.startSection("Test 1: Single Tile Mesh");
+    report.startSection("test1", "Test 1: Single Tile Mesh");
     test1(report);
-    report.endSection("Test 1");
+    report.endSection("test1");
     
-    report.startSection("Test 2: 2x2 Mesh");
+    report.startSection("test2", "Test 2: 2x2 Mesh");
     test2(report);
-    report.endSection("Test 2");
+    report.endSection("test2");
     
-    report.startSection("Test 3: 3x3 Mesh");
+    report.startSection("test3", "Test 3: 3x3 Mesh");
     test3(report);
-    report.endSection("Test 3");
+    report.endSection("test3");
     
-    report.startSection("Test 4: 4x4 Mesh");
+    report.startSection("test4", "Test 4: 4x4 Mesh");
     test4(report);
-    report.endSection("Test 4");
-    
-    report.endSection("Mesh Relief Tests");
+    report.endSection("test4");
 }
 
 function drawReliefMesh(report, reliefMesh) {
@@ -91,8 +87,10 @@ function drawReliefMesh(report, reliefMesh) {
         ctx.fillStyle = "black";
         ctx.fillText(`${face.idx}`, xx, yy);        
     }
+    
     report.logImage(canvas.toDataURL());
 }
+
 export function test0(report) {
     const outputLine = report.outputLine;
     const prefix = "";
@@ -106,14 +104,15 @@ export function test1(report) {
     const outputLine = report.outputLine;
     const prefix = "";
     const reliefMesh1x1 = new ReliefGrid(1, 1, 10);
-    report.startSection("Unflipped");
-    report.startSection("Dump");
-    reliefMesh1x1.dump(outputLine, prefix);
-    report.endSection("Dump");
     
+    report.startSection("unflipped", "Unflipped");
+    report.startSection("dump", "Dump");
+    reliefMesh1x1.dump(outputLine, prefix);
+    report.endSection("dump");
     drawReliefMesh(report, reliefMesh1x1);
-    report.endSection("Unflipped");
-    report.startSection("Flipped");
+    report.endSection("unflipped");
+    
+    report.startSection("flipped", "Flipped");
     const intersectFace1 = reliefMesh1x1.locateFaceForVertical([2, 5]);
     intersectFace1.dump(outputLine, prefix + "intersectFace1 === ")
     intersectFace1.shard.flip();
@@ -121,7 +120,7 @@ export function test1(report) {
     reliefMesh1x1.dump(outputLine, prefix + "1> ");
     report.endSection("dump");
     drawReliefMesh(report, reliefMesh1x1);
-    report.endSection("Flipped");
+    report.endSection("flipped");
 }
 
 export function test2(report) {

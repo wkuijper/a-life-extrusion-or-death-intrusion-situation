@@ -6,7 +6,7 @@ export class TestParagraph {
         this.parentSection = parentSection;
         this.idx = idx;
         this.contentElement = document.createElement("div");
-        this.hexHash = "";
+        this.hashHex = "0000000000000000000000000000000000000000000000000000000000000000";
         this.finished = false;
         this.passed = true;
     }
@@ -16,7 +16,7 @@ export class TestParagraph {
             throw new Error("can't finish paragraph more than once");
         }
         this.finished = true;
-        this.parent.paragraphIsFinished(this);
+        this.parentSection.paragraphIsFinished(this);
     }
     
 }
@@ -56,32 +56,34 @@ export class LinesTestParagraph extends TestParagraph {
         if (!this.committed) {
             return;
         }
-        this.hexHash = this.hasher.hex();
-        reportFinished();
+        this.hashHex = this.hasher.digest().hex();
+        this.reportFinished();
     }
 }
 
 export class ImageTestParagraph extends TestParagraph {
     
-    constructor(parentSection, idx, imageBlob) {
+    constructor(parentSection, idx, url, noHash) {
         super(parentSection, idx);
-        this.imgElement = document.createElement("img");
-        this.hashHasFinished = false;
+        const imgElement = document.createElement("img");
+        this.imgElement = imgElement;
+        this.hashHasFinished = false || noHash;
         this.imageHashFinished = false;
-        imageBlob.arrayBuffer().then((arrayBuffer) => {
-            const hasher = sha256();
-            const uint8View = new Uint8Array(arrayBuffer);
-            this.hasher.add(uint8View);
-            this.hexHash = hasher.hex();
-            this.hashHasFinished = true;
-            this.reportIfFinished();            
-        });
-        const imageURL = URL.createObjectURL(imageBlob);
-        imgElement.src = imageURL;
+        if (!noHash) {
+            fetch(url).then(r => r.blob().arrayBuffer().then((arrayBuffer) => {
+                const hasher = sha256();
+                const uint8View = new Uint8Array(arrayBuffer);
+                hasher.add(uint8View);
+                this.hashHex = hasher.digest().hex();
+                this.hashHasFinished = true;
+                this.reportIfFinished();            
+            }));
+        }
         imgElement.onload = () => {
             this.imageHashFinished = true;
             this.reportIfFinished();
         }
+        imgElement.src = url;
         this.contentElement.appendChild(imgElement);
     }
 
@@ -96,6 +98,7 @@ export class SubSectionTestParagraph extends TestParagraph {
     
     constructor(parentSection, idx, subSection) {
         super(parentSection, idx);
+        this.subSection = subSection;
         subSection.addFinishedHandler(() => {
             this.passed = subSection.passed;
             this.reportFinished();
@@ -107,19 +110,27 @@ export class SubSectionTestParagraph extends TestParagraph {
 
 export class TestSection {
 
-    constructor(key, title, level, expectedHexHash) {
-        this.key = key;
+    constructor(parentSection, name, title, expectedHashHex) {
+        this.parentSection = parentSection;
+        this.name = name;
         this.title = title;
-        this.level = level;
-
-        const headerTag =
-            (level === 0) ? "h1" :
-            (level === 1) ? "h2" :
-            (level === 2) ? "h3" :
-            "h4";
+        this.expectedHashHex = expectedHashHex ?? null;
         
-        this.headerElement = document.createElement(headerTag);
-        this.contentElement = document.createElement("section");
+        this.nameToSubsection = new Map();
+
+        const level = parentSection === null ? 1 : parentSection.level + 1;
+        this.level = level;
+        const headerTag =
+            (level <= 1) ? "h1" :
+            (level === 2) ? "h2" :
+            (level === 3) ? "h3" :
+            "h4";
+
+        const headerElement = document.createElement(headerTag);
+        const contentElement = document.createElement("section");
+        
+        this.headerElement = headerElement;
+        this.contentElement = contentElement;
 
         const triangleSpan = document.createElement("span");
         triangleSpan.innerHTML = "&#9656;";
@@ -134,14 +145,14 @@ export class TestSection {
         
         this.paragraphEntries = [];
         this.numberOfUnfinishedParagraphs = 0;
-
-        this.expectedHashHex = expectedHashHex;
         
         this.currLineParagraph = null;
+        
         this.committed = false;
         this.finished = false;
-        this.finishedListeners = [];
         this.passed = true;
+        
+        this.finishedHandlers = [];
     }
 
     _addParagraph(paragraph) {
@@ -150,31 +161,39 @@ export class TestSection {
             finished: false,
         });
         this.numberOfUnfinishedParagraphs++;
+        this.contentElement.appendChild(paragraph.contentElement);
+        return paragraph;
     }
     
-    addSection(subSection, noHash) {
-        if (this.currLineParagraph !== null) {
-            currLineParagraph.commit();
-            this.currLineParagraph = null;
-        }
-        const subSectionParagraph = this._addParagraph(
-            new SubSectionTestParagraph(this, this.paragraphs.length, subSection, noHash));
-    }
-    
-    addImage(blob, noHash) {
+    addImage(url, noHash) {
         const imageParagraph = this._addParagraph(
-            new ImageTestParagraph(this, this.paragraphs.length, blob, noHash));
+            new ImageTestParagraph(this, this.paragraphEntries.length, url, noHash));
     }
 
     addLine(str, noHash) {
         if (this.currLineParagraph === null) {
              const lineParagraph = this._addParagraph(
-                 new LinesTestParagraph(this, this.paragraphs.length));
+                 new LinesTestParagraph(this, this.paragraphEntries.length));
             this.currLineParagraph = lineParagraph;
         }
         this.currLineParagraph.addLine(str, noHash);
     }
 
+    createSubSection(name, title, expectedHashHex) {
+        if (this.nameToSubsection.has(name)) {
+            throw new Error(`existing subsection name: ${name}`);
+        }
+        const subSection = new TestSection(this, name, title, expectedHashHex);
+        this.nameToSubsection.set(name, subSection);
+        if (this.currLineParagraph !== null) {
+            this.currLineParagraph.commit();
+            this.currLineParagraph = null;
+        }
+        const subSectionParagraph = this._addParagraph(
+            new SubSectionTestParagraph(this, this.paragraphEntries.length, subSection));
+        return subSection;
+    }
+    
     commit() {
         if (this.committed) {
             throw new Error("can't commit section more than once");
@@ -199,7 +218,7 @@ export class TestSection {
     finishIfPossible() {
         if (this.committed &&
             this.numberOfUnfinishedParagraphs === 0) {
-            finish();
+            this.finish();
         }
     }
     
@@ -209,22 +228,20 @@ export class TestSection {
         }
         this.finished = true;
         const hasher = sha256();
-        for (const paragraph of this.paragraphs) {
+        for (const { paragraph } of this.paragraphEntries) {
             hasher.add(paragraph.hashHex);
         }
-        const hashHex = this.hasher.hex();
-        if (expectedHashHex !== null) {
-            if (hashHex !== this.expectedHashHex) {
-                this.passed = false;
-            }
+        const hashHex = hasher.digest().hex();
+        if (this.expectedHashHex !== null && hashHex !== this.expectedHashHex) {
+            this.passed = false;
         }
-        for (finishedListener of this.finishedListeners) {
-            finishedListener(this);
+        for (const finishedHandler of this.finishedHandlers) {
+            finishedHandler(this);
         }
     }
 
-    addFinishedListener(finishedListener) {
-        this.finishedListeners.push(finishedListener);
+    addFinishedHandler(finishedHandler) {
+        this.finishedHandlers.push(finishedHandler);
     }
     
     setExpanded(expanded) {
@@ -256,140 +273,36 @@ export class TestSection {
 
 export class TestReport {
 
-    constructor(mainEnclosing) {
-        this.sectionStack = [];
-        this.outputLine = (str, isErronous) => {
-            this.logLine(str, isErronous)
-        }
-        this.currSectionElement = null;
-        this.currSectionHeaderElement = null;
-        this.currSectionTitle = null;
-        this.currSectionHasher = null;
-        this.mainEnclosing = mainEnclosing;
-        this.currEnclosing = this.mainEnclosing;
-    }
-    
-    startSection(sectionTitle) {
-        let sectionHeaderTag;
-        if (this.sectionStack.length >= 3) {
-            sectionHeaderTag = "h4";
-        } else if (this.sectionStack.length === 2) {
-            sectionHeaderTag = "h3";
-        } else if (this.sectionStack.length === 1) {
-            sectionHeaderTag = "h2";
-        } else if (this.sectionStack.length === 0) {
-            sectionHeaderTag = "h1";
-        }
-        const sectionHeaderElement = document.createElement(sectionHeaderTag);
-        sectionHeaderElement.innerHTML = `&#9656;  ${sectionTitle}`;
-        const sectionElement = document.createElement("section");
-        sectionHeaderElement.onclick = (evt) => {
-            if (sectionElement.style.display !== "block") {
-                sectionHeaderElement.innerHTML = `&#9662; ${sectionTitle}`;
-                sectionElement.style.display = "block";        
-            } else {
-                sectionHeaderElement.innerHTML = `&#9656; ${sectionTitle}`;
-                sectionElement.style.display = "none"; 
-            }
+    constructor(mainEnclosing, title, expectedHashHex) {
+        const mainSection = new TestSection(null, "", title, expectedHashHex);
+        this.currSection = mainSection;
+        this.outputLine = (str) => {
+            this.logLine(str);            
         };
-        sectionElement.style.display = "none";
-
-        if (this.currSectionElement !== null) {
-            this.sectionStack.push({ 
-                sectionHeaderElement: this.currSectionHeaderElement,
-                sectionElement: this.currSectionElement, 
-                sectionTitle: this.currSectionTitle,
-                sectionHasher: this.currSectionHasher,
-            });
-        }
-
-        this.currSectionHeaderElement = sectionHeaderElement;
-        this.currSectionElement = sectionElement;
-        this.currSectionTitle = sectionTitle;
-        this.currSectionHasher = sha256();
-        
-        this.currEnclosing.appendChild(sectionHeaderElement);
-        this.currEnclosing.appendChild(sectionElement);
-        this.currEnclosing = sectionElement;
-
-        return;
-    }
-
-    endSection(sectionTitlePrefix, expectedHashHex) {
-        if (this.sectionElement === null) {
-            throw new Error("no section to close")
-        }
-        if (!this.currSectionTitle.startsWith(sectionTitlePrefix)) {
-            throw new Error(`unmatched endSection request: asked for title prefix: ${sectionTitlePrefix}: actual top section title was: ${sectionTitle}`);
-        }
-
-        let hashHex;
-        if (expectedHashHex !== undefined) {
-            hashHex = this.currSectionHasher.digest().hex();
-            const pass = hashHex === expectedHashHex
-            if (!pass) {
-                this.logHash(hashHex);
-                this.currSectionHeaderElement.style = "color: red;";
-            } else {
-                this.currSectionHeaderElement.style = "color: green;";
-            }
-        }
-        
-        if (this.sectionStack.length > 0) {
-            const {
-                sectionHeaderElement,
-                sectionElement, 
-                sectionTitle,
-                sectionHasher,
-            } = this.sectionStack.pop();
-            this.currSectionHeaderElement = sectionHeaderElement;
-            this.currSectionElement = sectionElement;
-            this.currSectionTitle = sectionTitle;
-            this.currSectionHasher = sectionHasher;
-            this.currEnclosing = this.currSectionElement;
-            if (expectedHashHex !== undefined) {
-                sectionHasher.add(hashHex);
-            }
-        } else {
-            this.currSectionHeaderElement = null;
-            this.currSectionElement = null;
-            this.currSectionTitle = null;
-            this.currSectionHasher = null;
-            this.currEnclosing = this.mainEnclosing;
-        }
+        mainEnclosing.appendChild(mainSection.contentElement);
     }
     
-    logLine(str, isErronous) {
-        const preLine = document.createElement("pre")
-        preLine.innerText = str;
-        if (isErronous !== undefined) {
-            if (isErronous) {
-                preLine.setAttribute("style", "color: red;");
-            } else {
-                preLine.setAttribute("style", "color: green;");
-            }
-        }
-        this.currEnclosing.appendChild(preLine);
-        this.currSectionHasher.add(str);
-        return;
+    startSection(name, title, expectedHashHex) {
+        this.currSection = this.currSection.createSubSection(name, title, expectedHashHex);
     }
 
-    logHash(str, isErronous) {
-        const preLine = document.createElement("pre")
-        preLine.innerText = str;
-        preLine.setAttribute("style", "color: red;");
-        this.currEnclosing.appendChild(preLine);
-        return;
+    endSection(name) {
+        if (this.currSection.name !== name) {
+            throw new Error(`unmatched endSection request: asked for name: ${name}: actual open section name was: ${this.currSection.name}`);
+        }
+        this.currSection.commit();
+        this.currSection = this.currSection.parentSection;
     }
     
-    logImage(dataURL, isErronous) {
-        const imageElement = document.createElement("img");
-        imageElement.src = dataURL;
-        if (isErronous) {
-            canvasElement.setAttribute("style", "background-color: red; color: white;")
+    logLine(str, noHash) {
+        this.currSection.addLine(str, noHash);
+    }
+    
+    logImage(url, hash) {
+        if (hash === undefined) {
+            hash = false;
         }
-        this.currEnclosing.appendChild(imageElement);
-        return;
+        this.currSection.addImage(url, !hash);
     }
 
     createCanvas(width, height) {
