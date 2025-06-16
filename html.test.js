@@ -1,12 +1,125 @@
 import { sha256 } from "./sha256.js";
 
+export class TestParagraph {
+
+    constructor(parentSection, idx) {
+        this.parentSection = parentSection;
+        this.idx = idx;
+        this.contentElement = document.createElement("div");
+        this.hexHash = "";
+        this.finished = false;
+        this.passed = true;
+    }
+    
+    reportFinished() {
+        if (this.finished) {
+            throw new Error("can't finish paragraph more than once");
+        }
+        this.finished = true;
+        this.parent.paragraphIsFinished(this);
+    }
+    
+}
+
+export class LinesTestParagraph extends TestParagraph {
+
+    constructor(parentSection, idx) {
+        super(parentSection, idx);
+        this.hasher = sha256();
+        this.committed = false;
+    }
+
+    addLine(str, noHash) {
+        if (this.finished) {
+            throw new Error("can't add line to finished paragraph");
+        }
+        if (!noHash) {
+            this.hasher.add(str);
+        }
+        const preLine = document.createElement("pre")
+        preLine.innerText = str;
+        if (noHash) {
+            preLine.style.color = "blue";
+        }
+        this.contentElement.appendChild(preLine);
+    }
+
+    commit() {
+        if (this.committed) {
+            throw new Error("can't commit paragraph more than once");
+        }
+        this.committed = true;
+        this.reportIfFinished();
+    }
+
+    reportIfFinished() {
+        if (!this.committed) {
+            return;
+        }
+        this.hexHash = this.hasher.hex();
+        reportFinished();
+    }
+}
+
+export class ImageTestParagraph extends TestParagraph {
+    
+    constructor(parentSection, idx, imageBlob) {
+        super(parentSection, idx);
+        this.imgElement = document.createElement("img");
+        this.hashHasFinished = false;
+        this.imageHashFinished = false;
+        imageBlob.arrayBuffer().then((arrayBuffer) => {
+            const hasher = sha256();
+            const uint8View = new Uint8Array(arrayBuffer);
+            this.hasher.add(uint8View);
+            this.hexHash = hasher.hex();
+            this.hashHasFinished = true;
+            this.reportIfFinished();            
+        });
+        const imageURL = URL.createObjectURL(imageBlob);
+        imgElement.src = imageURL;
+        imgElement.onload = () => {
+            this.imageHashFinished = true;
+            this.reportIfFinished();
+        }
+        this.contentElement.appendChild(imgElement);
+    }
+
+    reportIfFinished() {
+        if (this.imageHashFinished && this.hashHasFinished) {
+            this.reportFinished();
+        }
+    }
+}
+
+export class SubSectionTestParagraph extends TestParagraph {
+    
+    constructor(parentSection, idx, subSection) {
+        super(parentSection, idx);
+        subSection.addFinishedHandler(() => {
+            this.passed = subSection.passed;
+            this.reportFinished();
+        });
+        this.contentElement.appendChild(subSection.headerElement);
+        this.contentElement.appendChild(subSection.contentElement);
+    }
+}
+
 export class TestSection {
 
-    constructor(key, title, headerElement, contentElement, expectedHexHash) {
+    constructor(key, title, level, expectedHexHash) {
         this.key = key;
         this.title = title;
-        this.headerElement = headerElement;
-        this.contentElement = contentElement;
+        this.level = level;
+
+        const headerTag =
+            (level === 0) ? "h1" :
+            (level === 1) ? "h2" :
+            (level === 2) ? "h3" :
+            "h4";
+        
+        this.headerElement = document.createElement(headerTag);
+        this.contentElement = document.createElement("section");
 
         const triangleSpan = document.createElement("span");
         triangleSpan.innerHTML = "&#9656;";
@@ -18,40 +131,100 @@ export class TestSection {
         headerElement.appendChild(titleSpan);
         
         this.expanded = false;
-        this.subSections = [];
+        
+        this.paragraphEntries = [];
+        this.numberOfUnfinishedParagraphs = 0;
 
         this.expectedHashHex = expectedHashHex;
-        this.hasher = sha256();
         
-        this.passStatus = "inconclusive";
+        this.currLineParagraph = null;
+        this.committed = false;
+        this.finished = false;
+        this.finishedListeners = [];
+        this.passed = true;
+    }
+
+    _addParagraph(paragraph) {
+        this.paragraphEntries.push({
+            paragraph: paragraph,
+            finished: false,
+        });
+        this.numberOfUnfinishedParagraphs++;
+    }
+    
+    addSection(subSection, noHash) {
+        if (this.currLineParagraph !== null) {
+            currLineParagraph.commit();
+            this.currLineParagraph = null;
+        }
+        const subSectionParagraph = this._addParagraph(
+            new SubSectionTestParagraph(this, this.paragraphs.length, subSection, noHash));
+    }
+    
+    addImage(blob, noHash) {
+        const imageParagraph = this._addParagraph(
+            new ImageTestParagraph(this, this.paragraphs.length, blob, noHash));
     }
 
     addLine(str, noHash) {
-        if (!noHash) {
-            this.hasher.add(str);
+        if (this.currLineParagraph === null) {
+             const lineParagraph = this._addParagraph(
+                 new LinesTestParagraph(this, this.paragraphs.length));
+            this.currLineParagraph = lineParagraph;
         }
-        const preLine = document.createElement("pre")
-        preLine.innerText = str;
-        this.contentElement.appendChild(preLine);
+        this.currLineParagraph.addLine(str, noHash);
     }
 
-    addImage(url) {
-        const imgElement = document.createElement("img");
-        imgElement.src = url;
-        this.contentElement.appendChild(imgElement); 
+    commit() {
+        if (this.committed) {
+            throw new Error("can't commit section more than once");
+        }
+        this.committed = true;
+        this.finishIfPossible();    
     }
 
+    paragraphIsFinished(paragraph) {
+        const entry = this.paragraphEntries[paragraph.idx];
+        if (entry.finished) {
+            throw new Error("invariant violation: paragraph reported as finished more than once");
+        }
+        entry.finished = true;
+        this.numberOfUnfinishedParagraphs--;
+        if (!paragraph.passed) {
+            this.passed = false;
+        }
+        this.finishIfPossible();
+    }
+
+    finishIfPossible() {
+        if (this.committed &&
+            this.numberOfUnfinishedParagraphs === 0) {
+            finish();
+        }
+    }
+    
     finish() {
+        if (this.finished) {
+            throw new Error("can't finish section more than once");
+        }
+        this.finished = true;
+        const hasher = sha256();
+        for (const paragraph of this.paragraphs) {
+            hasher.add(paragraph.hashHex);
+        }
         const hashHex = this.hasher.hex();
         if (expectedHashHex !== null) {
             if (hashHex !== this.expectedHashHex) {
-                this.passStatus = "failed";
-            } else {
-                this.passStatus = "success";
+                this.passed = false;
             }
-        } else {
-            this.passStatus = "escalated";
         }
+        for (finishedListener of this.finishedListeners) {
+            finishedListener(this);
+        }
+    }
+
+    addFinishedListener(finishedListener) {
+        this.finishedListeners.push(finishedListener);
     }
     
     setExpanded(expanded) {
@@ -67,6 +240,7 @@ export class TestSection {
             return;
         }
         this.triangleSpan.innerHTML = "&#9662;";
+        this.contentElement.style.display = "block";
         this.expanded = true;
     }
 
@@ -75,6 +249,7 @@ export class TestSection {
             return;
         }
         this.triangleSpan.innerHTML = "&#9656;";
+        this.contentElement.style.display = "none";
         this.expanded = false;
     }
 }
