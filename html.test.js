@@ -5,20 +5,32 @@ export class TestParagraph {
     constructor(parentSection, idx) {
         this.parentSection = parentSection;
         this.idx = idx;
-        this.contentElement = document.createElement("div");
+        const contentElement = document.createElement("div");
+        contentElement.classList.add('paragraph-content');
+        this.contentElement = contentElement;
         this.hashHex = "0000000000000000000000000000000000000000000000000000000000000000";
+       
         this.finished = false;
-        this.passed = true;
+        this.failed = false;
+        this.passed = false;
     }
     
     reportFinished() {
         if (this.finished) {
-            throw new Error("can't finish paragraph more than once");
+            throw new Error("can't report paragraph as finished more than once");
         }
+        this.passed = !this.failed;
         this.finished = true;
-        this.parentSection.paragraphIsFinished(this);
+        this.parentSection.paragraphHasFinished(this);
     }
-    
+
+    reportFailed() {
+        if (this.failed) {
+            throw new Error("can't report paragraph as failed more than once");
+        }
+        this.failed = true;
+        this.parentSection.paragraphHasFailed(this);
+    }
 }
 
 export class LinesTestParagraph extends TestParagraph {
@@ -99,9 +111,11 @@ export class SubSectionTestParagraph extends TestParagraph {
     constructor(parentSection, idx, subSection) {
         super(parentSection, idx);
         this.subSection = subSection;
-        subSection.addFinishedHandler(() => {
-            this.passed = subSection.passed;
+        subSection.addFinishHandler(() => {
             this.reportFinished();
+        });
+        subSection.addFailHandler(() => {
+            this.reportFailed();
         });
         this.contentElement.appendChild(subSection.headerElement);
         this.contentElement.appendChild(subSection.contentElement);
@@ -128,37 +142,52 @@ export class TestSection {
 
         const headerElement = document.createElement(headerTag);
         const contentElement = document.createElement("section");
+        contentElement.style.display = "none";
         
         this.headerElement = headerElement;
         this.contentElement = contentElement;
 
         const triangleSpan = document.createElement("span");
+        triangleSpan.classList.add("triangle-span");
         triangleSpan.innerHTML = "&#9656;";
+        triangleSpan.onclick = () => {
+            this.setExpanded(!this.expanded);  
+        };
+        this.triangleSpan = triangleSpan;
         
         const titleSpan = document.createElement("span");
         titleSpan.innerText = title;
-
+        this.titleSpan = titleSpan;
+        
         headerElement.appendChild(triangleSpan);
         headerElement.appendChild(titleSpan);
         
         this.expanded = false;
         
         this.paragraphEntries = [];
+        
         this.numberOfUnfinishedParagraphs = 0;
+        this.numberOfFailedParagraphs = 0;
         
         this.currLineParagraph = null;
         
         this.committed = false;
         this.finished = false;
-        this.passed = true;
+        this.failed = false;
+        this.failedHash = false;
+        this.passed = false;
         
-        this.finishedHandlers = [];
+        this.finishHandlers = [];
+        this.failHandlers = [];
+        
+        this.memoizedPath = null;
     }
 
     _addParagraph(paragraph) {
         this.paragraphEntries.push({
             paragraph: paragraph,
             finished: false,
+            failed: false,
         });
         this.numberOfUnfinishedParagraphs++;
         this.contentElement.appendChild(paragraph.contentElement);
@@ -198,27 +227,50 @@ export class TestSection {
         if (this.committed) {
             throw new Error("can't commit section more than once");
         }
+        if (this.currLineParagraph !== null) {
+            this.currLineParagraph.commit();    
+        }
         this.committed = true;
         this.finishIfPossible();    
     }
 
-    paragraphIsFinished(paragraph) {
+    paragraphHasFinished(paragraph) {
         const entry = this.paragraphEntries[paragraph.idx];
         if (entry.finished) {
             throw new Error("invariant violation: paragraph reported as finished more than once");
         }
         entry.finished = true;
         this.numberOfUnfinishedParagraphs--;
-        if (!paragraph.passed) {
-            this.passed = false;
-        }
         this.finishIfPossible();
     }
 
+    paragraphHasFailed(paragraph) {
+        const entry = this.paragraphEntries[paragraph.idx];
+        if (entry.failed) {
+            throw new Error("invariant violation: paragraph reported as failed more than once");
+        }
+        entry.failed = true;
+        this.numberOfFailedParagraphs++;
+        this.failIfNeeded();
+    }
+    
     finishIfPossible() {
+        if (this.finished) {
+            return;
+        }
         if (this.committed &&
             this.numberOfUnfinishedParagraphs === 0) {
             this.finish();
+        }
+    }
+    
+    failIfNeeded() {
+        if (this.failed) {
+            return;
+        }
+        if (this.failedHash ||
+            this.numberOfFailedParagraphs > 0) {
+            this.fail();
         }
     }
     
@@ -232,16 +284,45 @@ export class TestSection {
             hasher.add(paragraph.hashHex);
         }
         const hashHex = hasher.digest().hex();
-        if (this.expectedHashHex !== null && hashHex !== this.expectedHashHex) {
-            this.passed = false;
+        this.hashHex = hashHex;
+        if (this.expectedHashHex !== null && this.hashHex !== this.expectedHashHex) {
+            console.error(`${this.path()}: hash failed: ${this.hashHex}`);
+            this.failedHash = true;
+            this.failIfNeeded();
         }
-        for (const finishedHandler of this.finishedHandlers) {
-            finishedHandler(this);
+        if (!this.failed) {
+            this.pass();
+        }
+        for (const finishHandler of this.finishHandlers) {
+            finishHandler(this);
         }
     }
 
-    addFinishedHandler(finishedHandler) {
-        this.finishedHandlers.push(finishedHandler);
+    fail() {
+        if (this.failed) {
+            throw new Error("can't fail section more than once");
+        }
+        this.failed = true;
+        this.headerElement.classList.add("failed");
+        for (const failHandler of this.failHandlers) {
+            failHandler(this);
+        }
+    }
+
+    pass() {
+        if (this.passed) {
+            throw new Error("can't pass section more than once");
+        }
+        this.passed = true;
+        this.headerElement.classList.add("passed");
+    }
+    
+    addFailHandler(failHandler) {
+        this.failHandlers.push(failHandler);
+    }
+    
+    addFinishHandler(finishHandler) {
+        this.finishHandlers.push(finishHandler);
     }
     
     setExpanded(expanded) {
@@ -269,16 +350,48 @@ export class TestSection {
         this.contentElement.style.display = "none";
         this.expanded = false;
     }
+
+    path() {
+        if (this.memoizedPath === null) {
+            if (this.parentSection === null) {
+                this.memoizedPath = this.name;
+            } else {
+                this.memoizedPath = this.parentSection.path() + "/" + this.name;
+            }
+        }
+        return this.memoizedPath;
+    }
+
+    expandPath(path) {
+        this.expand();
+        if (path.length === 0) {
+            return;
+        }
+        let firstSlashIndex = 0;
+        while (firstSlashIndex < path.length && path[firstSlashIndex] !== '/') {
+            firstSlashIndex++;
+        }
+        const firstPathElem = firstSlashIndex < path.length ? path.slice(0, firstSlashIndex) : path;
+        const restPath = path.slice(firstSlashIndex + 1);
+        if (!this.nameToSubsection.has(firstPathElem)) {
+            return;
+        }
+        const subSection = this.nameToSubsection.get(firstPathElem);
+        
+        subSection.expandPath(restPath); 
+    }
 }
 
 export class TestReport {
 
     constructor(mainEnclosing, title, expectedHashHex) {
         const mainSection = new TestSection(null, "", title, expectedHashHex);
+        this.mainSection = mainSection;
         this.currSection = mainSection;
         this.outputLine = (str) => {
             this.logLine(str);            
         };
+        mainEnclosing.appendChild(mainSection.headerElement);
         mainEnclosing.appendChild(mainSection.contentElement);
     }
     
@@ -310,6 +423,13 @@ export class TestReport {
         canvasElement.width = width;
         canvasElement.height = height;
         return canvasElement;
+    }
+
+    expandPath(path) {
+        if (path.length <= 1 || path[0] !== "/") {
+            return;
+        }
+        this.mainSection.expandPath(path.slice(1));
     }
 }
 

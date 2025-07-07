@@ -1,6 +1,7 @@
 import * as THREE from "./three.module.js";
 import {OrbitControls} from "./three/examples/jsm/controls/OrbitControls.js";
 import * as dat from "./dat.gui.module.js";
+import { ReliefGrid } from "./mesh.relief.js";
 
 let renderer;
 let scene;
@@ -126,6 +127,7 @@ function init3D() {
 		color: 0x0000ff, side: THREE.DoubleSide, wireframe: true });
 	plane = new THREE.Mesh(planeGeometry, planeMaterial);
 	plane.rotation.x += -.5 * Math.PI;
+	plane.visible = false;
 	
 	scene.add(plane);
 
@@ -163,6 +165,80 @@ function init3D() {
 
 	directionalLightHelper = new THREE.DirectionalLightHelper(directionalLight, 100);
 	scene.add(directionalLightHelper);
+
+	/////
+
+	const reliefMesh = new ReliefGrid(16, 16, 40);
+    for (const vertex of reliefMesh.vertices) {
+        const sx = Math.random() * 16 - 8;
+        const sy = Math.random() * 16 - 8;
+        const sz = Math.random() * 128 - 64;
+        vertex.setShift([sx, sy, sz]);
+    }
+	
+	const geometry = new THREE.BufferGeometry();
+
+    const halfEdges = reliefMesh.halfEdges;
+    const numberOfHalfEdges = halfEdges.length;
+    
+    const vertices = new Float32Array(numberOfHalfEdges * 3);
+    
+    for (let i = 0; i < numberOfHalfEdges; i++) {
+        const halfEdge = halfEdges[i];
+        const targetVertex = halfEdge.targetVertex;
+        const [x, y, z] = targetVertex.getShiftedPosition();
+        const offset = i * 3;
+        vertices[offset] = x;
+        vertices[offset + 1] = y;
+        vertices[offset + 2] = z;
+    }
+
+    const faces = reliefMesh.faces;
+    const numberOfFaces = faces.length;
+    
+    const indices = new Array(numberOfFaces);
+    let ii = 0;
+    for (let i = 0; i < numberOfFaces; i++) {
+        const face = faces[i];
+        let a = face.diagonalHalfEdge;
+        let b = a.nextHalfEdge;
+        let c = b.nextHalfEdge;
+        indices[ii] = a.idx;
+        ii++;
+        indices[ii] = b.idx;
+        ii++;
+        indices[ii] = c.idx;
+        ii++;
+    }
+
+    geometry.setIndex( indices );
+    geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+
+    geometry.computeVertexNormals();
+        
+    const material = new THREE.MeshStandardMaterial({ 
+		color: 0x0000ff, 
+        side: THREE.DoubleSide, 
+        wireframe: false,
+        polygonOffset: true,
+        polygonOffsetFactor: 1, // positive value pushes polygon further away
+        polygonOffsetUnits: 1
+    });
+    
+    const mesh = new THREE.Mesh( geometry, material );
+
+    // wireframe
+    var geo = new THREE.EdgesGeometry( mesh.geometry ); // or WireframeGeometry
+    var mat = new THREE.LineBasicMaterial( { color: 0xffff00 } );
+    var wireframe = new THREE.LineSegments( geo, mat );
+    mesh.add( wireframe );
+    
+    scene.add(mesh);
+    
+    mesh.rotation.x += .5 * Math.PI;
+    mesh.position.set(-(reliefMesh.width * reliefMesh.tileSize) / 2, 0, -(reliefMesh.height * reliefMesh.tileSize) / 2);
+    
+	
 }
 
 function initGUI() {

@@ -1,0 +1,17 @@
+h1, h2, h3, h4, h5, h6, span {
+    font-family: sans-serif;
+}
+
+.triangle-span {
+    margin-right: 5px;
+}
+
+.paragraph-content {}
+
+.failed {
+    color: red;
+}
+
+.passed {
+    color: green;
+}

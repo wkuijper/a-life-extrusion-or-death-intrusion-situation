@@ -42,6 +42,7 @@ export class ReliefGrid {
 			}
 		}
 		this.vertices = vertices;
+		this.nwVertex = vertices[0];
 		// create shards
 		const numberOfShards = height * width;
 		const shards = new Array(numberOfShards);
