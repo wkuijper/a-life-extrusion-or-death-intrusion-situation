@@ -307,44 +307,28 @@ export class ReliefGrid {
 			return;
 		}
 
-		// propagate changes and update normals
+		// update normals
 		
-		for (const vertex of this.changedVerticesWrtShift) {
-			for (const face of vertex.adjacentFaces()) {
-				face.reportAsChangedWrtOrientation();
-			}
-		}
-
-		for (const shard of this.changedShardsWrtFlipping) {
-			shard.diagonalEdge.reportAsChangedWrtFlipping();
-		}
-		
-		for (const edge of this.changedEdgesWrtFlipping) {
-			for (const face of edge.adjacentFaces()) {
-				face.reportAsChangedWrtFlipping();
-			}
-		}
-		
-		for (const face of this.changedFacesWrtFlipping) {
-			face.reportAsChangedWrtOrientation();
-		}
+		/* All the interactive flips and vertex shift changes 
+		   have been propagated to face orientation changes 
+		   which are handled in the loop below */
 		
 		for (const face of this.changedFacesWrtOrientation) {
 			face.updateNormal();
-			face.shard.reportAsChangedWrtSomething();
-			for (const vertex of face.vertices()) {
-				vertex.reportAsChangedWrtNormals();
-			}
+			/* Updates to the face normal trigger
+			   change reports on all the adjacent vertices
+			   which are handled in the loop below */
 		}
 		
 		for (const vertex of this.changedVerticesWrtNormals) {
-			for (const halfEdge of vertex.incomingHalfEdges()) {
-				halfEdge.reportAsChangedWrtNormal();
-			}
-		}
-		
-		for (const halfEdge of this.changedHalfEdgesWrtNormal) {
-			halfEdge.updateNormal();
+			vertex.updateNormals();
+			/* Updating the vertex normals in turn trigger
+			   change reports on all the incoming halfEdges.
+			   
+			   These change lists are reported to the 
+			   changeListeners below so that any associated 
+			   meshes or gizmos or whatever else can receive 
+			   minimal incremental updates. */
 		}
 
 		// report to change listeners
@@ -629,6 +613,7 @@ export class ReliefShard {
 			he12.nextHalfEdge = he23;
 
 			this.flipped = true;
+			this.reportAsChangedWrtFlipping();
 		} else {
 			const firstFace = this.firstFace;
 			const secondFace = this.secondFace;
@@ -652,6 +637,7 @@ export class ReliefShard {
 			he22.nextHalfEdge = he23;
 			
 			this.flipped = false;
+			this.reportAsChangedWrtFlipping();
 		}
 	}
 
@@ -660,11 +646,24 @@ export class ReliefShard {
 		yield this.secondFace;
 	}
 	
+	reportAsChangedWrtFlipping() {
+		if (this.inChangedListWrtFlipping) {
+			return;
+		}
+		this.grid.addShardToChangeListWrtFlipping(this);
+		this.inChangedListWrtFlipping = true;
+		this.diagonalEdge.reportAsChangedWrtFlipping();
+	}
+
+	removingFromChangeListWrtFlipping() {
+		this.inChangeListWrtFlipping = false;
+	}
+	
 	reportAsChangedWrtSomething() {
 		if (this.inChangedListWrtSomething) {
 			return;
 		}
-		this.grid.addFaceToChangeListWrtSomething(this);
+		this.grid.addShardToChangeListWrtSomething(this);
 		this.inChangedListWrtSomething = true;
 	}
 
@@ -681,6 +680,7 @@ export class ReliefFace {
 	 */
 	constructor(shard, idx) {
 		this.shard = shard;
+		this.grid = shard.grid;
 		this.idx = idx;
 		this.diagonalHalfEdge = null;
 		this.inChangedListWrtOrientation = false;
@@ -689,6 +689,7 @@ export class ReliefFace {
 	}
 
 	updateNormal() {
+		const diagonalHalfEdge = this.diagonalHalfEdge;
 		const [px, py, pz] = diagonalHalfEdge.sourceVertex.getShiftedPosition();
 		const nextHalfEdge = diagonalHalfEdge.nextHalfEdge;
 		const [qx, qy, qz] = nextHalfEdge.sourceVertex.getShiftedPosition();
@@ -702,7 +703,7 @@ export class ReliefFace {
 		const ny = az * bx - ax * bz;
 		const nz = ax * by - ay * bx;
 
-		const norm = nx * nx + ny * ny + nz * nz;
+		const norm = Math.sqrt(nx * nx + ny * ny + nz * nz);
 
 		if (norm <= 0) {
 			this.normal = [0, 0, 1];
@@ -710,8 +711,16 @@ export class ReliefFace {
 		}
 
 		const invNorm = 1 / norm;
-		
-		this.normal = [nx * invNorm, ny * invNorm, nz * invNorm];
+
+		const fx = nx * invNorm; const fy = ny * invNorm; const fz = nz * invNorm;
+		const [ffx, ffy, ffz] = this.normal;
+
+		if (ffx !== fx || ffy !== fy || ffz !== fz) {
+			this.normal = [fx, fy, fz];
+			for (const vertex of this.vertices()) {
+				vertex.reportAsChangedWrtNormals();
+			}
+		}
 	}
 	
 	dump(outputLine, indent) {
@@ -778,10 +787,20 @@ export class ReliefFace {
 		}
 		this.grid.addFaceToChangeListWrtFlipping(this);
 		this.inChangedListWrtFlipping = true;
+		this.reportAsChangedWrtOrientation();
 	}
 
 	removingFromChangeListWrtFlipping() {
 		this.inChangeListWrtFlipping = false;
+	}
+
+	*vertices() {
+		const he1 = this.diagonalHalfEdge;
+		yield he1.targetVertex;
+		const he2 = he1.nextHalfEdge;
+		yield he2.targetVertex;
+		const he3 = he2.nextHalfEdge;
+		yield he3.targetVertex;
 	}
 }
 
@@ -811,6 +830,42 @@ export class ReliefVertex {
 		this.inChangedListWrtNormals = false;
 	}
 
+	updateNormals() {
+		let tx = 0; let ty = 0; let tz = 0;
+		// scan clockwise
+		const firstHalfEdge = this.firstIncomingHalfEdge;
+		let currHalfEdge = firstHalfEdge;
+		do {
+			const [fx, fy, fz] = currHalfEdge.face.normal;
+			tx += fx; ty += fy; tz += fz;
+			const nextOutgoingHalfEdge = currHalfEdge.nextHalfEdge;
+			const nextIncomingHalfEdge = nextOutgoingHalfEdge.oppositeHalfEdge;
+			if (nextIncomingHalfEdge === null 
+				|| nextIncomingHalfEdge === firstHalfEdge
+				|| currHalfEdge.edge.isCreased) {
+				// patch anticlockwise
+				const norm = Math.sqrt(tx * tx + ty * ty + tz * tz);
+				const targetVertexFaceNormal = (norm <= 0) ?
+					[0, 0, 1] :
+					[tx / norm, ty / norm, tz / norm];
+				let backHalfEdge = currHalfEdge;
+				do {
+					backHalfEdge._updateTargetVertexFaceNormal(targetVertexFaceNormal);
+					if (backHalfEdge.edge.isCreased || backHalfEdge === firstHalfEdge) {
+						break;
+					}
+					const oppositeHalfEdge = backHalfEdge.oppositeHalfEdge;
+					if (oppositeHalfEdge === null) {
+						break;
+					}
+					backHalfEdge = oppositeHalfEdge.nextHalfEdge.nextHalfEdge;
+				} while (true);
+				tx = 0; ty = 0; tz = 0;
+			}
+			currHalfEdge = nextIncomingHalfEdge;
+		} while (currHalfEdge !== null && currHalfEdge !== firstHalfEdge); 
+	}
+	
 	dump(outputLine, indent) {
 		const incomingHalfEdgeIdxs = [];
 		for (const incomingHalfEdge of this.incomingHalfEdges()) {
@@ -848,8 +903,33 @@ export class ReliefVertex {
 		let outgoingHalfEdge = firstOutgoingHalfEdge;
 		do {
 			yield outgoingHalfEdge;
-			outgoingHalfEdge = outgoingHalfEdge.nextHalfEdge.oppositeHalfEdge;
+			outgoingHalfEdge = outgoingHalfEdge.nextHalfEdge.nextHalfEdge.oppositeHalfEdge;
 		} while (outgoingHalfEdge !== null && outgoingHalfEdge !== firstOutgoingHalfEdge);
+	}
+
+	*adjacentEdges() {
+		if (this.firstIncomingHalfEdge === null) {
+			// special case: empty mesh
+			return;
+		}
+		const firstIncomingHalfEdge = this.firstIncomingHalfEdge;
+		let incomingHalfEdge = firstIncomingHalfEdge;
+		do {
+			yield incomingHalfEdge.edge;
+			const outgoingHalfEdge = incomingHalfEdge.nextHalfEdge;
+			const nextIncomingHalfEdge = outgoingHalfEdge.oppositeHalfEdge;
+			if (nextIncomingHalfEdge === null) {
+				yield outgoingHalfEdge.edge;
+				return;
+			}
+			incomingHalfEdge = nextIncomingHalfEdge;
+		} while (incomingHalfEdge !== firstIncomingHalfEdge);
+	}
+
+	*adjacentFaces() {
+		for (const incomingHalfEdge of this.incomingHalfEdges()) {
+			yield incomingHalfEdge.face;
+		}
 	}
 	
 	getShiftedPosition() {
@@ -866,15 +946,15 @@ export class ReliefVertex {
 		}
 		if (this.shiftX !== shiftX) {
 			this.shiftX = shiftX;
-			this.reportAsChanged();
+			this.reportAsChangedWrtShift();
 		}
 		if (this.shiftY !== shiftY) {
 			this.shiftY = shiftY;
-			this.reportAsChanged();
+			this.reportAsChangedWrtShift();
 		}
 		if (this.shiftZ !== shiftZ) {
 			this.shiftZ = shiftZ;
-			this.reportAsChanged();
+			this.reportAsChangedWrtShift();
 		}
 		this.shiftedX = this.baseX + shiftX;
 		this.shiftedY = this.baseY + shiftY;
@@ -885,8 +965,11 @@ export class ReliefVertex {
 		if (this.inChangedListWrtShift) {
 			return;
 		}
-		this.grid.changedVerticesWrtShift.push(this);
+		this.grid.addVertexToChangeListWrtShift(this);
 		this.inChangedListWrtShift = true;
+		for (const face of this.adjacentFaces()) {
+			face.reportAsChangedWrtOrientation();
+		}
 	}
 
 	removingFromChangeListWrtShift() {
@@ -897,7 +980,7 @@ export class ReliefVertex {
 		if (this.inChangedListWrtNormals) {
 			return;
 		}
-		this.grid.changedVerticesWrtNormals.push(this);
+		this.grid.addVertexToChangeListWrtNormals(this);
 		this.inChangedListWrtNormals = true;
 	}
 	
@@ -940,7 +1023,7 @@ export class ReliefEdge {
 		if (this.inChangedListWrtCreasing) {
 			return;
 		}
-		this.grid.changedEdgesWrtCreasing.push(this);
+		this.grid.addEdgeToChangeListWrtCreasing(this);
 		this.inChangedListWrtCreasing = true;
 	}
 
@@ -952,12 +1035,21 @@ export class ReliefEdge {
 		if (this.inChangedListWrtFlipping) {
 			return;
 		}
-		this.grid.changedEdgesWrtFlipping.push(this);
+		this.grid.addEdgeToChangeListWrtFlipping(this);
 		this.inChangedListWrtFlipping = true;
 	}
 	
 	removingFromChangeListWrtFlipping() {
 		this.inChangeListWrtFlipping = false;
+	}
+
+	*adjacentFaces() {
+		const he1 = this.someHalfEdge;
+		yield he1.face;
+		const he2 = he1.oppositeHalfEdge;
+		if (he2 !== null) {
+			yield he2.face;
+		}
 	}
 }
 
@@ -972,6 +1064,7 @@ export class ReliefHalfEdge {
 	constructor(idx, reliefFace, [sourceVertex, targetVertex]) {
 		this.idx = idx;
 		this.face = reliefFace;
+		this.grid = reliefFace.grid;
 		this.sourceVertex = sourceVertex;
 		this.targetVertex = targetVertex;
 		this.targetVertexFaceNormal = [0, 0, 1];
@@ -980,41 +1073,16 @@ export class ReliefHalfEdge {
 		this.edge = null;
 	}
 
-	updateNormal() {
-		// scan clockwise
-		let currHalfEdge = this;
-		let terminalHalfEdge = this;
-		do {
-			// todo: add contribution of face
-			if (currHalfEdge.edge.isCreased) {
-				terminalHalfEdge = currHalfEdge;
-				break;
-			}
-			const nextIncomingHalfEdge = currHalfEdge.nextHalfEdge.oppositeHalfEdge;
-			if (nextIncomingHalfEdge === null
-				|| nextIncomingHalfEdge === terminalHalfEdge) {
-				break;
-			}
-			currHalfEdge = nextIncomingHalfEdge;
-		} while (true);
-		// scan anticlockwise
-		do {
-			if (currHalfEdge.edge.isCreased) {
-				// terminalHalfEdge = currHalfEdge;
-				break;
-			}
-			const oppositeHalfEdge = currHalfEdge.oppositeHalfEdge
-			if (oppositeHalfEdge === null) {
-				break;
-			}
-			const nextIncomingHalfEdge = oppositeHalfEdge.nextHalfEdge.nextHalfEdge;
-			if (nextIncomingHalfEdge === null
-				|| nextIncomingHalfEdge === terminalHalfEdge) {
-				break;
-			}
-			currHalfEdge = nextIncomingHalfEdge;
-			// todo: add contribution of face
-		} while (true);
+	_updateTargetVertexFaceNormal([fx, fy, fz]) {
+		const [ffx, ffy, ffz] = this.targetVertexFaceNormal;
+		if (ffx !== fx || ffy !== fy || ffz !== fz) {
+			this.targetVertexFaceNormal = [fx, fy, fz];
+			this.reportAsChangedWrtNormal();
+		}
+	}
+
+	getTargetVertexFaceNormal() {
+		return this.targetVertexFaceNormal;
 	}
 	
 	dump(outputLine, indent) {
@@ -1035,7 +1103,7 @@ export class ReliefHalfEdge {
 		if (this.inChangedListWrtNormal) {
 			return;
 		}
-		this.grid.changedEdgesWrtNormal.push(this);
+		this.grid.addHalfEdgeToChangeListWrtNormal(this);
 		this.inChangedListWrtNormal = true;
 	}
 	

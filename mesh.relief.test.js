@@ -190,7 +190,21 @@ function drawReliefMesh3D(report, reliefMesh, [width, height], [cameraX, cameraY
     const numberOfHalfEdges = halfEdges.length;
     
     const vertices = new Float32Array(numberOfHalfEdges * 3);
-    
+    const normals = new Float32Array(numberOfHalfEdges * 3);
+    for (let i = 0; i < numberOfHalfEdges; i++) {
+        const halfEdge = halfEdges[i];
+        const targetVertex = halfEdge.targetVertex;
+        const [x, y, z] = targetVertex.getShiftedPosition();
+        const offset = i * 3;
+        vertices[offset] = x;
+        vertices[offset + 1] = y;
+        vertices[offset + 2] = z;
+        const [fx, fy, fz] = halfEdge.getTargetVertexFaceNormal();
+        normals[offset] = fx;
+        normals[offset + 1] = fy;
+        normals[offset + 2] = fz;
+    }
+
     for (let i = 0; i < numberOfHalfEdges; i++) {
         const halfEdge = halfEdges[i];
         const targetVertex = halfEdge.targetVertex;
@@ -200,7 +214,7 @@ function drawReliefMesh3D(report, reliefMesh, [width, height], [cameraX, cameraY
         vertices[offset + 1] = y;
         vertices[offset + 2] = z;
     }
-
+    
     const faces = reliefMesh.faces;
     const numberOfFaces = faces.length;
     
@@ -221,12 +235,13 @@ function drawReliefMesh3D(report, reliefMesh, [width, height], [cameraX, cameraY
 
     geometry.setIndex( indices );
     geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+    geometry.setAttribute( 'normal', new THREE.BufferAttribute( normals, 3 ) );
 
-    geometry.computeVertexNormals();
+    //geometry.computeVertexNormals();
         
     const material = new THREE.MeshStandardMaterial({ 
 		color: 0x0000ff, 
-        side: THREE.DoubleSide, 
+        //side: THREE.DoubleSide, 
         wireframe: false,
         polygonOffset: true,
         polygonOffsetFactor: 1, // positive value pushes polygon further away
@@ -285,10 +300,19 @@ export function test1(report) {
     report.startSection("shiftSEU", "Shift SEU");
     const nwVertex = reliefMesh1x1.nwVertex;
     nwVertex.setShift([1.5, 2, 3]);
-    report.startSection("dump", "Dump");
+    
+    report.startSection("dumpBeforeUpdate", "Dump Before Update");
     reliefMesh1x1.dump(outputLine, prefix);
-    report.endSection("dump");
+    report.endSection("dumpBeforeUpdate");
+    
+    reliefMesh1x1.update(); 
+    
+    report.startSection("dumpAfterUpdate", "Dump After Update");
+    reliefMesh1x1.dump(outputLine, prefix);
+    report.endSection("dumpAfterUpdate");
+    
     drawReliefMesh2D(report, reliefMesh1x1);
+    reliefMesh1x1.update();
     drawReliefMesh3D(report, reliefMesh1x1, [400, 400], [10, 25, 10]);
     report.endSection("shiftSEU");
 
@@ -361,5 +385,10 @@ export function test5(report) {
         const sz = Math.random() * 32 - 16;
         vertex.setShift([sx, sy, sz]);
     }
+	for (const shard of reliefMesh.shards) {
+		if (Math.random()) {
+			shard.flip();
+		}
+	}
     drawReliefMesh3D(report, reliefMesh, [400, 400], [200, 300, 100]);
 }

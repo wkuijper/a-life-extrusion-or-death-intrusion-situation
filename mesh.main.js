@@ -167,14 +167,24 @@ function init3D() {
 	scene.add(directionalLightHelper);
 
 	/////
-
-	const reliefMesh = new ReliefGrid(16, 16, 40);
+	
+	const gridSize = 16;
+	const tileSize = 620 / gridSize;
+	const halfTileSize = tileSize / 2;
+	
+	const reliefMesh = new ReliefGrid(gridSize, gridSize, tileSize);
     for (const vertex of reliefMesh.vertices) {
-        const sx = Math.random() * 16 - 8;
-        const sy = Math.random() * 16 - 8;
-        const sz = Math.random() * 128 - 64;
+        const sx = Math.random() * .8 * halfTileSize;
+        const sy = Math.random() * .8 * halfTileSize;
+        const sz = Math.random() * 64 - 32;
         vertex.setShift([sx, sy, sz]);
     }
+	/*for (const edge of reliefMesh.edges) {
+        //if (Math.random() < .2) {
+			edge.setCreased(true);
+		//}
+    }*/
+	reliefMesh.update();
 	
 	const geometry = new THREE.BufferGeometry();
 
@@ -182,7 +192,8 @@ function init3D() {
     const numberOfHalfEdges = halfEdges.length;
     
     const vertices = new Float32Array(numberOfHalfEdges * 3);
-    
+    const normals = new Float32Array(numberOfHalfEdges * 3);
+	
     for (let i = 0; i < numberOfHalfEdges; i++) {
         const halfEdge = halfEdges[i];
         const targetVertex = halfEdge.targetVertex;
@@ -191,6 +202,10 @@ function init3D() {
         vertices[offset] = x;
         vertices[offset + 1] = y;
         vertices[offset + 2] = z;
+		const [fx, fy, fz] = halfEdge.getTargetVertexFaceNormal();
+        normals[offset] = fx;
+        normals[offset + 1] = fy;
+        normals[offset + 2] = fz;
     }
 
     const faces = reliefMesh.faces;
@@ -213,25 +228,26 @@ function init3D() {
 
     geometry.setIndex( indices );
     geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+	geometry.setAttribute( 'normal', new THREE.BufferAttribute( normals, 3 ) );
 
-    geometry.computeVertexNormals();
+    //geometry.computeVertexNormals();
         
     const material = new THREE.MeshStandardMaterial({ 
 		color: 0x0000ff, 
-        side: THREE.DoubleSide, 
+        //side: THREE.DoubleSide, 
         wireframe: false,
-        polygonOffset: true,
-        polygonOffsetFactor: 1, // positive value pushes polygon further away
-        polygonOffsetUnits: 1
+        //polygonOffset: true,
+        //polygonOffsetFactor: 1, // positive value pushes polygon further away
+        //polygonOffsetUnits: 1
     });
     
     const mesh = new THREE.Mesh( geometry, material );
 
     // wireframe
-    var geo = new THREE.EdgesGeometry( mesh.geometry ); // or WireframeGeometry
+    /*var geo = new THREE.EdgesGeometry( mesh.geometry ); // or WireframeGeometry
     var mat = new THREE.LineBasicMaterial( { color: 0xffff00 } );
     var wireframe = new THREE.LineSegments( geo, mat );
-    mesh.add( wireframe );
+    mesh.add( wireframe );*/
     
     scene.add(mesh);
     
