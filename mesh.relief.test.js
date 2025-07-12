@@ -27,9 +27,10 @@ export function test(report) {
     report.endSection("test5");
 
     
-    report.expandPath("/test5");
-    report.expandPath("/test1/shiftSEU");
+    //report.expandPath("/test5");
+    //report.expandPath("/test1/shiftSEU");
     //report.expandPath("/test1/shiftNWD");
+	report.expandPath("/test1/shiftConcave");
 }
 
 function drawReliefMesh2D(report, reliefMesh) {
@@ -76,7 +77,7 @@ function drawReliefMesh2D(report, reliefMesh) {
         const myy = (syy + tyy) / 2;
         const lxx = mxx - (nxx * fontSize);
         const lyy = myy - (nyy * fontSize);
-        ctx.fillStyle = "black";
+        ctx.fillStyle = "#777700";
         ctx.fillText(`${halfEdge.idx}`, lxx, lyy);  
     }
     
@@ -87,15 +88,15 @@ function drawReliefMesh2D(report, reliefMesh) {
         ctx.beginPath();
         ctx.rect(xx - fontSize, yy - fontSize, 2 * fontSize, 2 * fontSize);
         ctx.fill();
-        ctx.fillStyle = "black";
-        ctx.fillText(`v${vertex.idx}`, xx, yy);        
+        ctx.fillStyle = "#880000";
+        ctx.fillText(`${vertex.idx}`, xx, yy);        
     }
 
     for (const face of reliefMesh.faces) {
         const [x, y] = face.getShiftedMedianPosition();
         const [xx, yy] = [offsetX + x * scale, offsetY + y * scale];
-        ctx.fillStyle = "black";
-        ctx.fillText(`f${face.idx}`, xx, yy);        
+        ctx.fillStyle = "#000044";
+        ctx.fillText(`${face.idx}`, xx, yy);        
     }
     
     report.logImage(canvas.toDataURL());
@@ -279,6 +280,7 @@ export function test1(report) {
     const outputLine = report.outputLine;
     const prefix = "";
     const reliefMesh1x1 = new ReliefGrid(1, 1, 10);
+	const shard = reliefMesh1x1.shards[0];
     
     report.startSection("unflipped", "Unflipped");
     report.startSection("dump", "Dump");
@@ -298,7 +300,7 @@ export function test1(report) {
     report.endSection("flipped");
 
     report.startSection("shiftSEU", "Shift SEU");
-    const nwVertex = reliefMesh1x1.nwVertex;
+    const nwVertex = shard.nwVertex;
     nwVertex.setShift([1.5, 2, 3]);
     
     report.startSection("dumpBeforeUpdate", "Dump Before Update");
@@ -316,13 +318,18 @@ export function test1(report) {
     drawReliefMesh3D(report, reliefMesh1x1, [400, 400], [10, 25, 10]);
     report.endSection("shiftSEU");
 
-    report.startSection("shiftNWD", "Shift NWD");
-    nwVertex.setShift([-2.5, -3, -2]);
+    report.startSection("shiftConcave", "Shift Concave");
+    nwVertex.setShift([3.8, 3.8, 0]);
+	const neVertex = shard.neVertex;
+	neVertex.setShift([-3.8, -3.8, 0]);
+	const swVertex = shard.swVertex;
+	swVertex.setShift([-3.8, -3.8, 0]);
     report.startSection("dump", "Dump");
     reliefMesh1x1.dump(outputLine, prefix);
     report.endSection("dump");
     drawReliefMesh2D(report, reliefMesh1x1);
-    report.endSection("shiftNWD");
+    drawReliefMesh3D(report, reliefMesh1x1, [400, 400], [10, 25, 10]);
+    report.endSection("shiftConcave");
 }
 
 export function test2(report) {

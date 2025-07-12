@@ -23,7 +23,7 @@ export class ReliefGrid {
 		this.width = width;
 		this.height = height;
 		this.tileSize = tileSize;
-		this.maxAllowedShift = .4999 * tileSize;
+		this.maxAllowedShift = .5 * tileSize; // allow degeneracies: todo: handle them
 		const widthPlusOne = width + 1;
 		const heightPlusOne = height + 1;
 		this.widthPlusOne = widthPlusOne;
@@ -257,6 +257,10 @@ export class ReliefGrid {
 		this.requiresUpdate = false;
 	}
 
+	getShard(h, v) {
+		return this.shards[this.width * v + h];
+	}
+	
 	addVertexToChangeListWrtShift(vertex) {
 		this.changedVerticesWrtShift.push(vertex);
 		this.requiresUpdate = true;
@@ -591,10 +595,10 @@ export class ReliefShard {
 			const he21 = he23.nextHalfEdge;
 			const he22 = he21.nextHalfEdge;
 
-			const nw = he23.targetVertex;
-			const se = he11.targetVertex;
-			const sw = he21.targetVertex;
-			const ne = he12.targetVertex;
+			const nw = this.nwVertex;
+			const se = this.seVertex;
+			const sw = this.swVertex;
+			const ne = this.neVertex;
 			
 			he11.sourceVertex = sw;
 			he11.targetVertex = ne;
@@ -625,6 +629,16 @@ export class ReliefShard {
 			const he22 = he23.nextHalfEdge;
 			const he12 = he22.nextHalfEdge;
 
+			const nw = this.nwVertex;
+			const se = this.seVertex;
+			const sw = this.swVertex;
+			const ne = this.neVertex;
+			
+			he11.sourceVertex = nw;
+			he11.targetVertex = se;
+			he23.sourceVertex = se;
+			he23.targetVertex = nw;
+			
 			he12.face = firstFace;
 			he21.face = secondFace;
 
@@ -669,6 +683,44 @@ export class ReliefShard {
 
 	removingFromChangeListWrtSomething() {
 		this.inChangeListWrtSomething = false;
+	}
+
+	isMalformed() {
+		const diagonal = this.diagonalEdge.someHalfEdge;
+		const checkVertex = diagonal.nextHalfEdge.targetVertex;
+		if (diagonal.leftOfVertical(
+				checkVertex.getShiftedProjectedPosition())) {
+			return true;
+		}
+		const oppositeDiagonal = diagonal.oppositeHalfEdge;
+		const oppositeCheckVertex = oppositeDiagonal.nextHalfEdge.targetVertex;
+		if (oppositeDiagonal.leftOfVertical(
+				oppositeCheckVertex.getShiftedProjectedPosition())) {
+			return true;
+		}
+		return false;
+	}
+
+	isConvex() {
+		const diagonal = this.diagonalEdge.someHalfEdge;
+		const oppositeDiagonal = diagonal.oppositeHalfEdge;
+		const oppositeCheckVertex = oppositeDiagonal.nextHalfEdge.targetVertex;
+		const checkVertical = oppositeCheckVertex.getShiftedProjectedPosition();
+		const halfEdge1 = diagonal.nextHalfEdge;
+		const halfEdge2 = halfEdge1.nextHalfEdge;
+		if (halfEdge1.rightOfOrOnVertical(checkVertical)) {
+			return false;
+		}
+		if (halfEdge2.rightOfOrOnVertical(checkVertical)) {
+			return false;
+		}
+		return true;
+	}
+
+	canBeFlipped() {
+		if (this.isConvex() || this.isMalformed()) {
+			return true;
+		}
 	}
 }
 
@@ -831,17 +883,29 @@ export class ReliefVertex {
 	}
 
 	updateNormals() {
-		let tx = 0; let ty = 0; let tz = 0;
-		// scan clockwise
+		// scan anticlockwise to find baseHalfEdge
 		const firstHalfEdge = this.firstIncomingHalfEdge;
-		let currHalfEdge = firstHalfEdge;
+		let baseHalfEdge = firstHalfEdge;
+		do {
+			const oppositeHalfEdge = baseHalfEdge.oppositeHalfEdge;
+			if (oppositeHalfEdge === null) {
+				break;
+			}
+			baseHalfEdge = oppositeHalfEdge.nextHalfEdge.nextHalfEdge;
+			if (baseHalfEdge.isCreased) {
+				break;
+			}
+		} while (baseHalfEdge !== firstHalfEdge);
+		// scan clockwise
+		let tx = 0; let ty = 0; let tz = 0;
+		let currHalfEdge = baseHalfEdge;
 		do {
 			const [fx, fy, fz] = currHalfEdge.face.normal;
 			tx += fx; ty += fy; tz += fz;
 			const nextOutgoingHalfEdge = currHalfEdge.nextHalfEdge;
 			const nextIncomingHalfEdge = nextOutgoingHalfEdge.oppositeHalfEdge;
 			if (nextIncomingHalfEdge === null 
-				|| nextIncomingHalfEdge === firstHalfEdge
+				|| nextIncomingHalfEdge === baseHalfEdge
 				|| currHalfEdge.edge.isCreased) {
 				// patch anticlockwise
 				const norm = Math.sqrt(tx * tx + ty * ty + tz * tz);
@@ -851,7 +915,7 @@ export class ReliefVertex {
 				let backHalfEdge = currHalfEdge;
 				do {
 					backHalfEdge._updateTargetVertexFaceNormal(targetVertexFaceNormal);
-					if (backHalfEdge.edge.isCreased || backHalfEdge === firstHalfEdge) {
+					if (backHalfEdge.edge.isCreased || backHalfEdge === baseHalfEdge) {
 						break;
 					}
 					const oppositeHalfEdge = backHalfEdge.oppositeHalfEdge;
@@ -863,7 +927,7 @@ export class ReliefVertex {
 				tx = 0; ty = 0; tz = 0;
 			}
 			currHalfEdge = nextIncomingHalfEdge;
-		} while (currHalfEdge !== null && currHalfEdge !== firstHalfEdge); 
+		} while (currHalfEdge !== null && currHalfEdge !== baseHalfEdge); 
 	}
 	
 	dump(outputLine, indent) {
@@ -931,9 +995,37 @@ export class ReliefVertex {
 			yield incomingHalfEdge.face;
 		}
 	}
+
+	*adjacentShards() {
+		const h = this.h;
+		const v = this.v;
+		const grid = this.grid;
+		const width = grid.width;
+		const height = grid.height;
+		if (h > 0) {
+			if (v > 0) {
+				yield grid.getShard(h-1, v-1);
+			}
+			if (v < height) {
+				yield grid.getShard(h-1, v);
+			}
+		}
+		if (h < width) {
+			if (v > 0) {
+				yield grid.getShard(h, v-1);
+			}
+			if (v < height) {
+				yield grid.getShard(h, v);
+			}
+		}
+	}
 	
 	getShiftedPosition() {
 		return [this.shiftedX, this.shiftedY, this.shiftedZ];
+	}
+
+	getShiftedProjectedPosition() {
+		return [this.shiftedX, this.shiftedY];
 	}
 
 	setShift([shiftX, shiftY, shiftZ]) {
@@ -959,6 +1051,11 @@ export class ReliefVertex {
 		this.shiftedX = this.baseX + shiftX;
 		this.shiftedY = this.baseY + shiftY;
 		this.shiftedZ = shiftZ;
+		for (const shard of this.adjacentShards()) {
+			if (shard.isMalformed()) {
+				shard.flip();
+			}
+		}
 	}
 
 	reportAsChangedWrtShift() {
@@ -1097,6 +1194,24 @@ export class ReliefHalfEdge {
 		const [sx, sy, _sz] = this.sourceVertex.getShiftedPosition();
 		const [tx, ty, _tz] = this.targetVertex.getShiftedPosition();
 		return (tx - sx) * (y - sy) - (ty - sy) * (x - sx) <= 0;
+	}
+
+	leftOfOrOnVertical([x, y]) {
+		const [sx, sy, _sz] = this.sourceVertex.getShiftedPosition();
+		const [tx, ty, _tz] = this.targetVertex.getShiftedPosition();
+		return (tx - sx) * (y - sy) - (ty - sy) * (x - sx) >= 0;
+	}
+
+	rightOfVertical([x, y]) {
+		const [sx, sy, _sz] = this.sourceVertex.getShiftedPosition();
+		const [tx, ty, _tz] = this.targetVertex.getShiftedPosition();
+		return (tx - sx) * (y - sy) - (ty - sy) * (x - sx) < 0;
+	}
+
+	leftOfVertical([x, y]) {
+		const [sx, sy, _sz] = this.sourceVertex.getShiftedPosition();
+		const [tx, ty, _tz] = this.targetVertex.getShiftedPosition();
+		return (tx - sx) * (y - sy) - (ty - sy) * (x - sx) > 0;
 	}
 
 	reportAsChangedWrtNormal() {
