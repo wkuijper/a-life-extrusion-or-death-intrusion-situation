@@ -457,20 +457,194 @@ class Shard {
         const baseHalfFace22 = tetrahedron22.baseHalfFace;
         
 		if (!this.flipped) {
+
+            // unpack base faces side-1
+            
             const [baseHalfEdge111, baseHalfEdge112, baseHalfEdge113] = baseHalfFace11.halfEdges();
             const baseVertex111 = baseHalfEdge111.sourceVertex;
             const baseVertex112 = baseHalfEdge112.sourceVertex;
             const baseVertex113 = baseHalfEdge113.sourceVertex;
 
-            const [baseHalfEdge121, baseHalfEdge122, baseHalfEdge123] = baseHalfFace12.halfEdges();
-            const baseVertex121 = baseHalfEdge121.sourceVertex;
-            const baseVertex122 = baseHalfEdge122.sourceVertex;
+            const [baseHalfEdge123, baseHalfEdge124, baseHalfEdge121] = baseHalfFace12.halfEdges();
             const baseVertex123 = baseHalfEdge123.sourceVertex;
+            const baseVertex124 = baseHalfEdge124.sourceVertex;
+            const baseVertex121 = baseHalfEdge121.sourceVertex;
 
+            if (baseVertex121 !== baseVertex111) {
+                throw new Error(`invariant violation`);
+            }
+            if (baseVertex113 !== baseVertex123) {
+                throw new Error(`invariant violation`);
+            }
+
+            // unpack side faces 1-side
             
+            const sideHalfEdge1111 = baseHalfEdge111.neighbourHalfEdge;
+            const sideHalfEdge1112 = sideHalfEdge1111.nextHalfEdge;
+            const sideHalfEdge1113 = sideHalfEdge1112.nextHalfEdge;
             
-            topVertex1
-			//this.flipped = true;
+            const sideHalfEdge1121 = baseHalfEdge112.neighbourHalfEdge;
+            const sideHalfEdge1122 = baseHalfEdge1121.nextHalfEdge;
+            const sideHalfEdge1123 = baseHalfEdge1122.nextHalfEdge;
+            
+            const sideHalfEdge1131 = baseHalfEdge113.neighbourHalfEdge;
+            const sideHalfEdge1132 = baseHalfEdge1131.nextHalfEdge;
+            const sideHalfEdge1133 = baseHalfEdge1132.nextHalfEdge;
+
+            const sideHalfEdge1231 = baseHalfEdge123.neighbourHalfEdge;
+            const sideHalfEdge1232 = sideHalfEdge1231.nextHalfEdge;
+            const sideHalfEdge1233 = sideHalfEdge1232.nextHalfEdge;
+            
+            const sideHalfEdge1241 = baseHalfEdge124.neighbourHalfEdge;
+            const sideHalfEdge1242 = baseHalfEdge1241.nextHalfEdge;
+            const sideHalfEdge1243 = baseHalfEdge1242.nextHalfEdge;
+            
+            const sideHalfEdge1211 = baseHalfEdge121.neighbourHalfEdge;
+            const sideHalfEdge1212 = baseHalfEdge1211.nextHalfEdge;
+            const sideHalfEdge1213 = baseHalfEdge1212.nextHalfEdge;
+
+            // flip sourceVertices of relevant halfedges
+
+            baseHalfEdge113.sourceVertex = baseVertex124;
+            baseHalfEdge121.sourceVertex = baseVertex112;
+            sideHalfEdge1131.sourceVertex = baseVertex112;
+            sideHalfEdge1211.sourceVertex = baseVertex124;
+            sideHalfEdge1132.sourceVertex = baseVertex124;
+            sideHalfEdge1212.sourceVertex = baseVertex112;
+
+            // adapt next halfedge relations
+
+            baseHalfEdge111.nextHalfEdge = baseHalfEdge121;
+            baseHalfEdge121.nextHalfEdge = baseHalfEdge124;
+
+            baseHalfEdge123.nextHalfEdge = baseHalfEdge113;
+            baseHalfEdge113.nextHalfEdge = baseHalfEdge112;
+
+            baseHalfEdge111.halfFace.halfEdge1 = baseHalfEdge112;
+            baseHalfEdge123.halfFace.halfEdge1 = baseHalfEdge124;
+            
+            baseHalfEdge111.halfFace = baseHalfEdge121.halfFace;
+            baseHalfEdge123.halfFace = baseHalfEdge113.halfFace;
+            
+            // adapt neighbouring relations
+
+            sideHalfEdge1243.neighbourHalfEdge = sideHalfEdge1112; // unlink
+            sideHalfEdge1112.neighbourHalfEdge = sideHalfEdge1243;
+            
+            sideHalfEdge1133.neighbourHalfEdge = sideHalfEdge1122; // relink
+            sideHalfEdge1122.neighbourHalfEdge = sideHalfEdge1133;
+            sideHalfEdge1113.neighbourHalfEdge = sideHalfEdge1212;
+            sideHalfEdge1212.neighbourHalfEdge = sideHalfEdge1113;
+
+            sideHalfEdge1232.neighbourHalfEdge = sideHalfEdge1123; // unlink
+            sideHalfEdge1123.neighbourHalfEdge = sideHalfEdge1232;
+
+            sideHalfEdge1132.neighbourHalfEdge = sideHalfEdge1233; // relink
+            sideHalfEdge1233.neighbourHalfEdge = sideHalfEdge1132;
+            sideHalfEdge1213.neighbourHalfEdge = sideHalfEdge1242;
+            sideHalfEdge1242.neighbourHalfEdge = sideHalfEdge1213;
+
+            // unpack base faces 2-side
+
+            const [baseHalfEdge211, baseHalfEdge212, baseHalfEdge213] = baseHalfFace21.halfEdges();
+            const baseVertex211 = baseHalfEdge211.sourceVertex;
+            const baseVertex212 = baseHalfEdge212.sourceVertex;
+            const baseVertex213 = baseHalfEdge213.sourceVertex;
+
+            const [baseHalfEdge223, baseHalfEdge224, baseHalfEdge221] = baseHalfFace22.halfEdges();
+            const baseVertex223 = baseHalfEdge223.sourceVertex;
+            const baseVertex224 = baseHalfEdge224.sourceVertex;
+            const baseVertex221 = baseHalfEdge221.sourceVertex;
+
+            if (baseVertex221 !== baseVertex211) {
+                throw new Error(`invariant violation`);
+            }
+            if (baseVertex213 !== baseVertex223) {
+                throw new Error(`invariant violation`);
+            }
+
+            if (baseVertex111 !== baseVertex213 
+                || baseVertex112 !== baseVertex212 
+                || baseVertex113 !== baseVertex211
+                || baseVertex123 !== baseVertex221
+                || baseVertex124 !== baseVertex224
+                || baseVertex121 !== baseVertex223) {
+                throw new Error(`invariant violation`);
+            }
+
+            if (baseHalfEdge113.edge !== baseHalfEdge121.edge
+                || baseHalfEdge213.edge !== baseHalfEdge221.edge) {    
+                throw new Error(`invariant violation`);
+            }
+            
+            // unpack side faces 2-side
+            
+            const sideHalfEdge2111 = baseHalfEdge211.neighbourHalfEdge;
+            const sideHalfEdge2112 = sideHalfEdge2111.nextHalfEdge;
+            const sideHalfEdge2113 = sideHalfEdge2112.nextHalfEdge;
+
+            const sideHalfEdge2121 = baseHalfEdge212.neighbourHalfEdge;
+            const sideHalfEdge2122 = baseHalfEdge2121.nextHalfEdge;
+            const sideHalfEdge2123 = baseHalfEdge2122.nextHalfEdge;
+            
+            const sideHalfEdge2131 = baseHalfEdge213.neighbourHalfEdge;
+            const sideHalfEdge2132 = baseHalfEdge2131.nextHalfEdge;
+            const sideHalfEdge2133 = baseHalfEdge2132.nextHalfEdge;
+
+            const sideHalfEdge2231 = baseHalfEdge223.neighbourHalfEdge;
+            const sideHalfEdge2232 = sideHalfEdge2231.nextHalfEdge;
+            const sideHalfEdge2233 = sideHalfEdge2232.nextHalfEdge;
+            
+            const sideHalfEdge2241 = baseHalfEdge224.neighbourHalfEdge;
+            const sideHalfEdge2242 = baseHalfEdge2241.nextHalfEdge;
+            const sideHalfEdge2243 = baseHalfEdge2242.nextHalfEdge;
+            
+            const sideHalfEdge2211 = baseHalfEdge221.neighbourHalfEdge;
+            const sideHalfEdge2212 = baseHalfEdge2211.nextHalfEdge;
+            const sideHalfEdge2213 = baseHalfEdge2212.nextHalfEdge;
+
+            // flip sourceVertices of relevant halfedges
+
+            baseHalfEdge213.sourceVertex = baseVertex224;
+            baseHalfEdge221.sourceVertex = baseVertex212;
+            sideHalfEdge2131.sourceVertex = baseVertex212;
+            sideHalfEdge2211.sourceVertex = baseVertex224;
+            sideHalfEdge2132.sourceVertex = baseVertex224;
+            sideHalfEdge2212.sourceVertex = baseVertex212;
+
+            // adapt next halfedge relations
+
+            baseHalfEdge211.nextHalfEdge = baseHalfEdge221;
+            baseHalfEdge221.nextHalfEdge = baseHalfEdge224;
+
+            baseHalfEdge223.nextHalfEdge = baseHalfEdge213;
+            baseHalfEdge213.nextHalfEdge = baseHalfEdge212;
+
+            baseHalfEdge211.halfFace.halfEdge1 = baseHalfEdge212;
+            baseHalfEdge223.halfFace.halfEdge1 = baseHalfEdge224;
+            
+            baseHalfEdge211.halfFace = baseHalfEdge221.halfFace;
+            baseHalfEdge223.halfFace = baseHalfEdge213.halfFace;
+            
+            // adapt neighbouring relations
+
+            sideHalfEdge2243.neighbourHalfEdge = sideHalfEdge2112; // unlink
+            sideHalfEdge2112.neighbourHalfEdge = sideHalfEdge2243;
+            
+            sideHalfEdge2133.neighbourHalfEdge = sideHalfEdge2122; // relink
+            sideHalfEdge2122.neighbourHalfEdge = sideHalfEdge2133;
+            sideHalfEdge2113.neighbourHalfEdge = sideHalfEdge2212;
+            sideHalfEdge2212.neighbourHalfEdge = sideHalfEdge2113;
+
+            sideHalfEdge2232.neighbourHalfEdge = sideHalfEdge2123; // unlink
+            sideHalfEdge2123.neighbourHalfEdge = sideHalfEdge2232;
+
+            sideHalfEdge2132.neighbourHalfEdge = sideHalfEdge2233; // relink
+            sideHalfEdge2233.neighbourHalfEdge = sideHalfEdge2132;
+            sideHalfEdge2213.neighbourHalfEdge = sideHalfEdge2242;
+            sideHalfEdge2242.neighbourHalfEdge = sideHalfEdge2213;
+            
+			this.flipped = true;
 		} else {
 			//this.flipped = false;
 		}
