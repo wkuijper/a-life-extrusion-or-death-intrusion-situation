@@ -420,7 +420,132 @@ class HalfShard {
         const baseHalfFace2 = tetrahedron2.baseHalfFace;
         return baseHalfFace2._halfEdgeForVertices(sourceVertex, targetVertex);
     }
+
+    _flip() {
+        
+        /**
+         * This is deep surgery: to visualize, draw the two tetrahedrons with their joined quadrilateral 
+         * base-plane flat in the center of the page and the 4 exposed triangular side-faces folded outwards 
+         * like a four-pointed star.
+         *
+         * The two faces that are shared between the two tetrahedrons (the ones that are actually
+         * being flipped) then need to be drawn flat, separately, and imagined to be sticking up from
+         * the page at the diagonal that is to be flipped.
+         *
+         * Visualizing flat like that is nescesary for understanding this code. First, annotate all
+         * the halfedges and write their labels. Next, step through the code and refer to the diagram
+         * repeatedly. While doing so, mentally fold the tetrahedrons back together and mentally flatten 
+         * them back on the page repeatedly.
+         *
+         * This allows us to gain an intuition for how the halfedges at the seams of the flattened 
+         * representation fit back together in 3D. We need to do this in order to understand the 
+         * neighbouring and opposite relations between them.
+         *
+         * Next, to understand the flipping action, draw the same diagram with the diagonal flipped. 
+         * With that, compare that target situation to the original situation at every step. This 
+         * allows one to see how to convert the former into the latter.
+         *
+         * Visualizing in 3D directly gets to be a tangled mess because of occlusion effects. 
+         * 
+         * Yes, it's true we live in 3 spatial dimensions and we "understand" 3D space. However,
+         * we do not have "volumetric vision" we have 2D stereoscopic vision. As such, when we
+         * attempt to visualize directly in 3D, we can no longer read off the labels we assigned
+         * to the halfedges. That's why flattening the visualization is crucial for understanding 
+         * this code (unless you're a savant or ASI of course).
+         */
+        
+        const tetrahedron1 = this.tetrahedron1;
+        const tetrahedron2 = this.tetrahedron2;
+        
+        const baseHalfFace1 = tetrahedron1.baseHalfFace;
+        const baseHalfFace2 = tetrahedron2.baseHalfFace;
+
+        // unpack base faces
+        
+        const [baseHalfEdge11, baseHalfEdge12, baseHalfEdge13] = baseHalfFace1.halfEdges();
+        const baseVertex11 = baseHalfEdge11.sourceVertex;
+        const baseVertex12 = baseHalfEdge12.sourceVertex;
+        const baseVertex13 = baseHalfEdge13.sourceVertex;
+
+        const [baseHalfEdge23, baseHalfEdge24, baseHalfEdge21] = baseHalfFace2.halfEdges();
+        const baseVertex23 = baseHalfEdge23.sourceVertex;
+        const baseVertex24 = baseHalfEdge24.sourceVertex;
+        const baseVertex21 = baseHalfEdge21.sourceVertex;
+
+        if (baseVertex21 !== baseVertex11) {
+            throw new Error(`invariant violation`);
+        }
+        if (baseVertex13 !== baseVertex23) {
+            throw new Error(`invariant violation`);
+        }
+
+        // unpack side faces 1-side
+        
+        const sideHalfEdge111 = baseHalfEdge11.neighbourHalfEdge;
+        const sideHalfEdge112 = sideHalfEdge111.nextHalfEdge;
+        const sideHalfEdge113 = sideHalfEdge112.nextHalfEdge;
+        
+        const sideHalfEdge121 = baseHalfEdge12.neighbourHalfEdge;
+        const sideHalfEdge122 = baseHalfEdge121.nextHalfEdge;
+        const sideHalfEdge123 = baseHalfEdge122.nextHalfEdge;
+        
+        const sideHalfEdge131 = baseHalfEdge13.neighbourHalfEdge;
+        const sideHalfEdge132 = baseHalfEdge131.nextHalfEdge;
+        const sideHalfEdge133 = baseHalfEdge132.nextHalfEdge;
     
+        const sideHalfEdge231 = baseHalfEdge23.neighbourHalfEdge;
+        const sideHalfEdge232 = sideHalfEdge231.nextHalfEdge;
+        const sideHalfEdge233 = sideHalfEdge232.nextHalfEdge;
+        
+        const sideHalfEdge241 = baseHalfEdge24.neighbourHalfEdge;
+        const sideHalfEdge242 = baseHalfEdge241.nextHalfEdge;
+        const sideHalfEdge243 = baseHalfEdge242.nextHalfEdge;
+        
+        const sideHalfEdge211 = baseHalfEdge21.neighbourHalfEdge;
+        const sideHalfEdge212 = baseHalfEdge211.nextHalfEdge;
+        const sideHalfEdge213 = baseHalfEdge212.nextHalfEdge;
+
+        // flip sourceVertices of relevant halfedges
+
+        baseHalfEdge13.sourceVertex = baseVertex24;
+        baseHalfEdge21.sourceVertex = baseVertex12;
+        sideHalfEdge131.sourceVertex = baseVertex12;
+        sideHalfEdge211.sourceVertex = baseVertex24;
+        sideHalfEdge132.sourceVertex = baseVertex24;
+        sideHalfEdge212.sourceVertex = baseVertex12;
+
+        // adapt next halfedge relations
+
+        baseHalfEdge11.nextHalfEdge = baseHalfEdge21;
+        baseHalfEdge21.nextHalfEdge = baseHalfEdge24;
+
+        baseHalfEdge23.nextHalfEdge = baseHalfEdge13;
+        baseHalfEdge13.nextHalfEdge = baseHalfEdge12;
+
+        baseHalfEdge11.halfFace.halfEdge1 = baseHalfEdge12;
+        baseHalfEdge23.halfFace.halfEdge1 = baseHalfEdge24;
+        
+        baseHalfEdge11.halfFace = baseHalfEdge21.halfFace;
+        baseHalfEdge23.halfFace = baseHalfEdge13.halfFace;
+        
+        // adapt neighbouring relations
+
+        sideHalfEdge243.neighbourHalfEdge = sideHalfEdge112; // unlink
+        sideHalfEdge112.neighbourHalfEdge = sideHalfEdge243;
+        
+        sideHalfEdge133.neighbourHalfEdge = sideHalfEdge122; // relink
+        sideHalfEdge122.neighbourHalfEdge = sideHalfEdge133;
+        sideHalfEdge113.neighbourHalfEdge = sideHalfEdge212;
+        sideHalfEdge212.neighbourHalfEdge = sideHalfEdge113;
+
+        sideHalfEdge232.neighbourHalfEdge = sideHalfEdge123; // unlink
+        sideHalfEdge123.neighbourHalfEdge = sideHalfEdge232;
+
+        sideHalfEdge132.neighbourHalfEdge = sideHalfEdge233; // relink
+        sideHalfEdge233.neighbourHalfEdge = sideHalfEdge132;
+        sideHalfEdge213.neighbourHalfEdge = sideHalfEdge242;
+        sideHalfEdge242.neighbourHalfEdge = sideHalfEdge213;
+    }
 }
 
 class Shard {
