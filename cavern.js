@@ -1,45 +1,217 @@
 class CavernGrid {
 
+    /*_reportNewVertex(vertex) {
+        this.__vertices[this.__vertexIndex] = vertex;
+        vertex._index = this.__vertexIndex;
+        this.__vertexIndex++;
+    }*/
+
+    vertices() {
+        return this.__vertices.values();
+    }
+
+    vertexAt(index) {
+        return this.__vertices[index];
+    }
+    
+    /*_reportNewGem(gem) {
+        this.__gems[this.__gemIndex] = gem;
+        gem._index = this.__gemIndex;
+        this.__gemIndex++;
+    }*/
+
+    gems() {
+        return this.__gems.values();
+    }
+
+    gemAt(index) {
+        return this.__gems[index];
+    }
+    
+    _reportNewHalfShard(halfShard) {
+        this.__halfShards[this.__halfShardIndex] = halfShard;
+        halfShard._index = this.__halfShardIndex;
+        this.__halfShardIndex++;
+    }
+
+    halfShards() {
+        return this.__halfShards.values();
+    }
+
+    halfShardAt(index) {
+        return this.__halfShards[index];
+    }
+    
+    _reportNewTetrahedron(tetrahedron) {
+        this.__tetrahedrons[this.__tetrahedronIndex] = tetrahedron;
+        tetrahedron._index = this.__tetrahedronIndex;
+        this.__tetrahedronIndex++;
+    }
+    
+    tetrahedrons() {
+        return this.__tetrahedrons.values();
+    }
+    
+    tetrahedronAt(index) {
+        return this.__tetrahedrons[index];
+    }
+
+    _reportNewHalfFace(halfFace) {
+        this.__halfFaces[this.__halfFaceIndex] = halfFace;
+        halfFace._index = this.__halfFaceIndex;
+        this.__halfFaceIndex++;
+    }
+    
+    halfFaces() {
+        return this.__halfFaces.values();
+    }
+    
+    halfFaceAt(index) {
+        return this.__halfFaces[index];
+    }
+
+    _reportNewHalfEdge(halfEdge) {
+        this.__halfEdges[this.__halfEdgeIndex] = halfEdge;
+        halfEdge._index = this.__halfEdgeIndex;
+        this.__halfEdgeIndex++;
+    }
+    
+    _reportNewFace(face) {
+        this.__faces[this.__faceIndex] = face;
+        face._index = this.__faceIndex;
+        this.__faceIndex++;
+    }
+
+    faces() {
+        return this.__faces.values();
+    }
+
+    faceAt(index) {
+        return this.__faces[index];
+    }
+    
+    _reportNewEdge(edge) {
+        this.__edges[this.__edgeIndex] = edge;
+        edge._index = this.__edgeIndex;
+        this.__edgeIndex++;
+    }
+    
+    edges() {
+        return this.__edges.values();
+    }
+
+    edgeAt(index) {
+        return this.__edges[index];
+    }
+    
     /**
-    * A CavernGrid is a volumetric representation consisting of a grid of perturbed "cubes" 
-    * (they're not actually geometric cubes so we call them /gems/ instead) with additional,
-    * tetrahedral structure inside them. This internal tetrahedral structure in addition to the
-    * fact that the vertices can be shifted a small amount from their grid regimented positions
-    * allows for much more organic volumes to be represented.
+    * A CavernGrid is a volumetric representation consisting of a grid of perturbed cube-like
+    * structures called gems.
     *
-    * Rather than only allowing strict cubic "minecraft-like" features, a cavern-grid can 
-    * represent volumes and surfaces with some degree of slant, fillets and chamfers in them.
+    * Said gems, in turn, have additional tetrahedral structure inside them. 
     *
-    * At the same time, because the representation remains essentially homeomorphic to a three 
+    * It is this internal tetrahedral structure in addition to the fact that the vertices can 
+    * be drifted a small amount from their grid regimented anchor positions that allows for much 
+    * more organic volumes to be represented than would be possible with a strict cubic voxel 
+    * grid.
+    *
+    * Rather than only allowing straight "minecraft-like" features, a cavern-grid can represent 
+    * volumes and surfaces with some degree of slant, fillets and chamfers in them.
+    *
+    * At the same time, because the representation remains essentially anchored to a three 
     * dimensional grid, we're still enjoying some of the benefits of that simpler representation,
-    * i.e.: increased robustness, fast point location, limited local impact of mutations to the 
-    * mesh, etc.
+    * i.e.: increased robustness, fast point location, limited local impact of mutations, etc.
     */
     constructor(width, height, depth) {
-        this.width = width;
-        this.height = height;
-        this.depth = depth;
-        const numberOfGems = width * height * depth;
-        const gems = new Array(numberOfGems);
-        const numberOfCenterVertices = numberOfGems;
-        const centerVertices = new Array(numberOfCenterVertices);
+        if (width < 1 || height < 1 || depth < 1 
+            || width !== Math.floor(width) || height !== Math.floor(height) || depth !== Math.floor(depth)) {
+            throw new Error(`grid dimensions must all be integers greater than zero: [${width}, ${height}, ${depth}]`);
+        }
+        
+        this.__width = width;
+        this.__height = height;
+        this.__depth = depth;
+
         const widthPlusOne = width + 1;
         const heightPlusOne = height + 1;
         const depthPlusOne = depth + 1;
+        
+        const numberOfGems = width * height * depth;
+        const gems = new Array(numberOfGems);
+        this.__gems = gems;
+        
+        const numberOfCenterVertices = numberOfGems;
         const numberOfCornerVertices = widthPlusOne * heightPlusOne * depthPlusOne;
-        const cornerVertices = new Array(numberOfCornerVertices);
-        let index = 0;
+        const numberOfVertices = numberOfCenterVertices + numberOfCornerVertices;
+        const vertices = new Array(numberOfVertices);
+        this.__vertices = vertices;
+        
+        const numberOfHalfShardsPerGem = 6;
+        const numberOfHalfShards = numberOfHalfShardsPerGem * numberOfGems;
+        this.__halfShards = new Array(numberOfHalfShards);
+        this.__halfShardIndex = 0;
+
+        const numberOfTetrahedronsPerHalfShard = 2;
+        const numberOfTetrahedrons = numberOfHalfShards * numberOfTetrahedronsPerHalfShard;
+        this.__tetrahedrons = new Array(numberOfTetrahedrons);
+        this.__tetrahedronIndex = 0;
+
+        const numberOfHalfFacesPerTetrahedron = 4;
+        const numberOfHalfFaces = numberOfTetrahedrons * numberOfHalfFacesPerTetrahedron;
+        this.__halfFaces = new Array(numberOfHalfFaces);
+        this.__halfFaceIndex = 0;
+
+        const numberOfHalfEdgesPerHalfFace = 3;
+        const numberOfHalfEdges = numberOfHalfFaces * numberOfHalfEdgesPerHalfFace;
+        this.__halfEdges = new Array(numberOfHalfEdges);
+        this.__halfEdgeIndex = 0;
+        
+        const numberOfGemSides = numberOfHalfShards;
+        const numberOfBoundaryGemSides = 2 * (width * height) + 2 * (width * depth) + 2 * (height * depth);
+        const numberOfSharedGemSides = (numberOfGemSides - numberOfBoundaryGemSides) / 2;
+        const numberOfShards = numberOfBoundaryGemSides + numberOfSharedGemSides;
+        this.__shards = new Array(numberOfShards);
+        this.__shardIndex = 0;
+        
+        const numberOfInternalGemFaces = 8;
+        const numberOfExternalGemFacesPerSide = 2;
+        const numberOfFaces = 
+            numberOfShards * numberOfExternalGemFacesPerSide + 
+            numberOfGems * numberOfInternalGemFaces;
+        this.__faces = new Array(numberOfFaces);
+        this.__faceIndex = 0;
+        
+        const numberOfInternalGemEdges = numberOfGems * 8;
+        const numberOfExternalGemEdges = 
+            depthPlusOne * widthPlusOne * height // level edges in y-direction
+            + depthPlusOne * heightPlusOne * width // level edges in x-direction
+            + widthPlusOne * heightPlusOne * depth // level edges in z-direction
+            + widthPlusOne * height * depth // diagonal edges in x-direction
+            + width * heightPlusOne * depth // diagonal edges in y-direction
+            + width * height * depthPlusOne // diagonal edges in z-direction
+        const numberOfGemEdges = numberOfInternalGemEdges + numberOfExternalGemEdges;
+        this.__edges = new Array(numberOfGemEdges);
+        this.__edgeIndex = 0;
+        
+        const widthPlusOne = width + 1;
+        const heightPlusOne = height + 1;
+        const depthPlusOne = depth + 1;
+        
+        let cornerVertexIndex = 0;
         for (let z = 0; z < depthPlusOne; z++) {
             for (let y = 0; y < heightPlusOne; y++) {
                 for (let x = 0; x < widthPlusOne; x++) {
                     const cornerVertex = new Vertex(this, x, y, z);
-                    cornerVertices[index] = cornerVertex;
-                    index++;
+                    vertices[cornerVertexIndex] = cornerVertex;
+                    cornerVertex._index = cornerVertexIndex;
+                    cornerVertexIndex++;
                 }
             }
         }
+        
         const cornerVerticesArea = widthPlusOne * heightPlusOne;
-        index = 0;
+        let gemIndex = 0;
+        let centerVertexIndex = numberOfCornerVertices;
         for (let z = 0; z < depth; z++) {
             const uOffset = z * cornerVerticesArea;
             const dOffset = (z+1) * cornerVerticesArea;
@@ -61,54 +233,112 @@ class CavernGrid {
                     const use = cornerVertices[usOffset + xx];
                     const dsw = cornerVertices[dsOffset + x];
                     const dse = cornerVertices[dsOffset + xx];
+                    
                     const center = new Vertex(this, x + .5, y + .5, z + .5);
-                    centerVertices[index] = center;
-                    const gem = new Gem(this, x, y, z, unw, une, use, usw, dnw, dne, dse, dsw, center);
-                    gems[index] = gem;
-
-                    // set up outgoing halfedges for vertices (some overlap is tolerated)
+                    vertices[centerVertexIndex] = center;
+                    centerVertexIndex++;
                     
-                    usw.someOutgoingHalfEdge = gem.sHalfShard.getHalfEdgeForVertices(usw, use);
-                    use.someOutgoingHalfEdge = gem.sHalfShard.getHalfEdgeForVertices(use, usw);
-                    
-                    dsw.someOutgoingHalfEdge = gem.sHalfShard.getHalfEdgeForVertices(dsw, dse);
-                    dse.someOutgoingHalfEdge = gem.sHalfShard.getHalfEdgeForVertices(dse, dsw);
-                    
-                    une.someOutgoingHalfEdge = gem.nHalfShard.getHalfEdgeForVertices(une, unw);
-                    unw.someOutgoingHalfEdge = gem.nHalfShard.getHalfEdgeForVertices(unw, une);
-                    
-                    dne.someOutgoingHalfEdge = gem.nHalfShard.getHalfEdgeForVertices(dne, dnw);
-                    dnw.someOutgoingHalfEdge = gem.nHalfShard.getHalfEdgeForVertices(dnw, dne);
-                    
-                    center.someOutgoingHalfEdge = gem.nHalfShard.getHalfEdgeForVertices(center, unw);
-
-                    index++;
+                    const gem = new Gem(this, unw, une, use, usw, dnw, dne, dse, dsw, center);
+                    gems[gemIndex] = gem;
+                    gem._index = gemIndex;
+                    gemIndex++;
                 }
             }
         }
 
         // connect halfshards in all directions
 
-        // up<->down
-        const gemArea = width * height;
+        const gemsArea = width * height;
+        const widthMinusOne = width - 1;
+        const heightMinusOne = height - 1;
         const depthMinusOne = depth - 1;
-        for (let z = 0; z < depthMinusOne; z++) {
-            const uOffset = z * gemArea;
-            const dOffset = (z+1) * gemArea;
+        
+        for (let z = 0; z < depth; z++) {
+            const uOffset = z * gemsArea;
+            const dOffset = (z+1) * gemsArea;
             for (let y = 0; y < height; y++) {
-                const yOffset = y * width;
-                const uyOffset = uOffset + yOffset;
-                const dyOffset = dOffset + yOffset;
+                const nOffset = y * width;
+                const sOffset = (y+1) * width;
+                
+                const unOffset = uOffset + nOffset;
+                const usOffset = uOffset + sOffset;
+                const dnOffset = dOffset + nOffset;
+                
                 for (let x = 0; x < width; x++) {
-                    const uGem = gems[uyOffset + x];
-                    const dGem = gems[dyOffset + x];
-                    uGem.dHalfShard._connectWithOpposite(dGem.uHalfShard);
+                    const wOffset = x;
+                    const eOffset = (x+1);
+                    
+                    const unwIndex = unOffset + wOffset;
+                    const unwGem = gems[unwIndex];
+                    
+                    if (x === 0) {
+                        unwGem._wHalfShard._terminateAsBoundary(grid);
+                    }
+                    if (x < widthMinusOne) {
+                        const uneIndex = unffset + eOffset;
+                        const uneGem = gems[uneIndex];
+                        unwGem._eHalfShard._connectWithOpposite(grid, uneGem._wHalfShard);
+                    } else {
+                        unwGem._eHalfShard._terminateAsBoundary(grid);   
+                    }
+
+                    if (y === 0) {
+                        unwGem._nHalfShard._terminateAsBoundary(grid);
+                    }
+                    if (y < heightMinusOne) {
+                        const uswIndex = usOffset + wOffset;
+                        const uswGem = gems[uswIndex];
+                        unwGem._sHalfShard._connectWithOpposite(grid, uswGem._nHalfShard);
+                    } else {
+                        unwGem._sHalfShard._terminateAsBoundary(grid); 
+                    }
+                    
+                    if (z === 0) {
+                        unwGem._uHalfShard._terminateAsBoundary(grid);
+                    }
+                    if (z < depthMinusOne) {
+                        const dnwIndex = dnOffset + wOffset;
+                        const dnwGem = gems[dnwIndex];
+                        unwGem._dHalfShard._connectWithOpposite(grid, dnwGem._uHalfShard);
+                    } else {
+                        unwGem._dHalfShard._terminateAsBoundary(grid); 
+                    }
                 }
             }
         }
-
+        
+        // create internal/external edges and connect vertices with outgoing halfedges
+        
+        for (let z = 0; z < depth; z++) {
+            const zOffset = z * gemsArea;
+            for (let y = 0; y < height; y++) {
+                const zyOffset = zOffset + y * width;
+                for (let x = 0; x < width; x++) {
+                    const gem = gems[zyOffset + x];
+                    initialWitnessHalfEdges()
+                    for (const halfEdge of gem._initialWitnessHalfEdges()) {
+                        if (halfEdge.edge === null) {
+                            halfEdge._connectWithSiblings(this);
+                        }
+                    }
+                }
+            }
+        }
+        
+        /*
+        
+        if (true) { // north boundary
+            for (let z = 0; z < depth; y++) {
+                const zOffset = z * gemsArea;
+                const yOffset = zOffset + 0 * width;
+                for (let x = 0; x < width; x++) {
+                    const gem = gems[yOffset + x];
+                    gem.nHalfShard._terminateAsBoundary();
+                }
+            }
+        }
+        
         // north<->south
-        const heightMinusOne = height - 1;
         for (let z = 0; z < depth; z++) {
             const zOffset = z * cornerVerticesArea;
             for (let y = 0; y < heightMinusOne; y++) {
@@ -117,13 +347,36 @@ class CavernGrid {
                 for (let x = 0; x < width; x++) {
                     const nGem = gems[nyOffset + x];
                     const sGem = gems[syOffset + x];
-                    nGem.sHalfShard._connectWithOpposite(sGem.nHalfShard);
+                    nGem.sHalfShard._connectWithOpposite(grid, sGem.nHalfShard);
                 }             
+            }
+        }
+
+        if (true) { // south boundary
+            const yTerm = heightMinusOne * width;
+            for (let z = 0; z < depth; y++) {
+                const zOffset = z * gemsArea;
+                const yOffset = zOffset + yTerm;
+                for (let x = 0; x < width; x++) {
+                    const gem = gems[yOffset + x];
+                    gem.sHalfShard._terminateAsBoundary();
+                }
+            }
+        }
+
+        if (true) { // east boundary
+            const xTerm = widthMinusOne;
+            for (let z = 0; z < depth; y++) {
+                const zOffset = z * gemsArea;
+                for (let y = 0; y < height; y++) {
+                    const yOffset = zOffset + y * width;
+                    const gem = gems[yOffset + xTerm];
+                    gem.eHalfShard._terminateAsBoundary();
+                }
             }
         }
         
         // east<->west
-        const widthMinusOne = width - 1;
         for (let z = 0; z < depth; z++) {
             const zOffset = z * cornerVerticesArea;
             for (let y = 0; y < height; y++) {
@@ -132,14 +385,23 @@ class CavernGrid {
                     const offset = yOffset + x;
                     const wGem = gems[offset];
                     const eGem = gems[offset + 1];
-                    wGem.eHalfShard._connectWithOpposite(eGem.wHalfShard);        
+                    wGem.eHalfShard._connectWithOpposite(grid, eGem.wHalfShard);        
+                }
+            }
+        }
+        
+        if (true) { // west boundary
+            for (let z = 0; z < depth; y++) {
+                const zOffset = z * gemsArea;
+                for (let y = 0; y < height; y++) {
+                    const yOffset = zOffset + y * width;
+                    const gem = gems[yOffset + 0];
+                    gem.wHalfShard._terminateAsBoundary();
                 }
             }
         }
 
-        // terminate shards on all boundaries of the grid
-        
-        if (true) { // top boundary
+        if (true) { // up boundary
             const zOffset = 0;
             for (let y = 0; y < height; y++) {
                 yOffset = zOffset + y * width;
@@ -150,8 +412,24 @@ class CavernGrid {
             }
         }
         
-        if (true) { // bottom boundary
-            const zOffset = depthMinusOne * gemArea;
+        // up<->down
+        for (let z = 0; z < depthMinusOne; z++) {
+            const uOffset = z * gemsArea;
+            const dOffset = (z+1) * gemsArea;
+            for (let y = 0; y < height; y++) {
+                const yOffset = y * width;
+                const uyOffset = uOffset + yOffset;
+                const dyOffset = dOffset + yOffset;
+                for (let x = 0; x < width; x++) {
+                    const uGem = gems[uyOffset + x];
+                    const dGem = gems[dyOffset + x];
+                    uGem._dHalfShard._connectWithOpposite(grid, dGem.uHalfShard);
+                }
+            }
+        }
+
+        if (true) { // down boundary
+            const zOffset = depthMinusOne * gemsArea;
             for (let y = 0; y < height; y++) {
                 yOffset = zOffset + y * width;
                 for (let x = 0; x < width; x++) {
@@ -160,57 +438,24 @@ class CavernGrid {
                 }
             }
         }
-
-        if (true) { // north boundary
-            for (let z = 0; z < depth; y++) {
-                const zOffset = z * gemArea;
-                const yOffset = zOffset + 0 * width;
-                for (let x = 0; x < width; x++) {
-                    const gem = gems[yOffset + x];
-                    gem.nHalfShard._terminateAsBoundary();
-                }
-            }
-        }
         
-        if (true) { // south boundary
-            const yTerm = heightMinusOne * width;
-            for (let z = 0; z < depth; y++) {
-                const zOffset = z * gemArea;
-                const yOffset = zOffset + yTerm;
-                for (let x = 0; x < width; x++) {
-                    const gem = gems[yOffset + x];
-                    gem.sHalfShard._terminateAsBoundary();
-                }
-            }
-        }
-        
-        if (true) { // west boundary
-            for (let z = 0; z < depth; y++) {
-                const zOffset = z * gemArea;
-                for (let y = 0; y < height; y++) {
-                    const yOffset = zOffset + y * width;
-                    const gem = gems[yOffset + 0];
-                    gem.wHalfShard._terminateAsBoundary();
-                }
-            }
-        }
+        // treat edges
 
-        if (true) { // east boundary
-            const xTerm = widthMinusOne;
-            for (let z = 0; z < depth; y++) {
-                const zOffset = z * gemArea;
-                for (let y = 0; y < height; y++) {
-                    const yOffset = zOffset + y * width;
-                    const gem = gems[yOffset + xTerm];
-                    gem.eHalfShard._terminateAsBoundary();
-                }
-            }
-        }
-
-        this.cornerVertices = cornerVertices;
-        this.centerVertices = centerVertices;
-        this.gems = gems;
-        this.nwdVertex = cornerVertices[0];
+        // set up outgoing halfedges for vertices (some overlap is tolerated)
+                    
+                    usw._someOutgoingHalfEdge = gem._sHalfShard._halfEdgeForVertices(usw, use);
+                    use._someOutgoingHalfEdge = gem._sHalfShard._halfEdgeForVertices(use, usw);
+                    
+                    dsw._someOutgoingHalfEdge = gem._sHalfShard._halfEdgeForVertices(dsw, dse);
+                    dse._someOutgoingHalfEdge = gem._sHalfShard._halfEdgeForVertices(dse, dsw);
+                    
+                    une._someOutgoingHalfEdge = gem._nHalfShard._halfEdgeForVertices(une, unw);
+                    unw._someOutgoingHalfEdge = gem._nHalfShard._halfEdgeForVertices(unw, une);
+                    
+                    dne._someOutgoingHalfEdge = gem._nHalfShard._halfEdgeForVertices(dne, dnw);
+                    dnw._someOutgoingHalfEdge = gem._nHalfShard._halfEdgeForVertices(dnw, dne);
+                    
+                    center._someOutgoingHalfEdge = gem._nHalfShard._halfEdgeForVertices(center, unw);
         
         // run a closure procedure over all the vertices in order to create 
         // common edge objects for all winged halfedge linked lists
@@ -241,7 +486,7 @@ class CavernGrid {
                 startHalfEdge = neighbourHalfEdge;
             } while (startHalfEdge !== halfEdge); // we came back to start: forward pass will be trivially exhaustive
             // set common edge object by iterating in forward (neighbour->opposite) direction
-            const edge = new Edge(startHalfEdge);
+            const edge = new Edge(grid, startHalfEdge);
             let currHalfEdge = startHalfEdge;
             do {
                 currHalfEdge.edge = edge;
@@ -275,32 +520,320 @@ class CavernGrid {
                 }
                 currHalfEdge = neighbourHalfEdge.oppositeHalfEdge;
             } while (currHalfEdge !== null && currHalfEdge !== startHalfEdge)
-        }
+        } */
     }
 }
 
 class Vertex {
 
-    constructor(grid, x, y, z) {
-        this.grid = grid;
-        this.x = x;
-        this.y = y;
-        this.z = z;
-        this.someHalfEdge = null;
+    get grid() {
+        return this.__grid;
+    }
+
+    get index() {
+        return this._index;
+    }
+    
+    get anchorX() {
+        return this.__anchorX;
+    }
+    
+    get anchorY() {
+        return this.__anchorY;
+    }
+    
+    get anchorZ() {
+        return this.__anchorZ;
+    }
+
+    setDriftX(driftX) {
+        if (driftX < -.5 || driftX > .5) {    
+            throw new Error(`drift value must be between -.5 and .5`);
+        }
+        const newX = this.__anchorX + driftX;
+        if (this.__x !== newX) {
+            this.__x = newX;
+            // TODO: notify drift
+        }
+    }
+
+    getDriftX() {
+        return this.__x - this.__anchorX;
+    }
+
+    setDriftY(driftY) {
+        if (driftY < -.5 || driftY > .5) {    
+            throw new Error(`drift value must be between -.5 and .5`);
+        }
+        const newY = this.__anchorY + driftY;
+        if (newY !== this.__y) {
+            this.__y = newY;
+            // TODO: notify drift
+        }
+    }
+    
+    getDriftY() {
+        return this.__y - this.__anchorY;
+    }
+    
+    setDriftZ(driftZ) {
+        if (driftZ < -.5 || driftZ > .5) {    
+            throw new Error(`drift value must be between -.5 and .5`);
+        }
+        const newZ = this.__anchorZ + driftZ;
+        if (newZ !== this.__z) {
+            this.__z = newZ;
+            // TODO: notify drift
+        }
+    }
+    
+    getDriftZ() {
+        return this.__z - this.__anchorZ;
+    }
+
+    setX(x) {
+        if (this.__x === x) {
+            return;
+        }
+        const driftX = x - this.__anchorX;
+        if (driftX < -.5 || driftX > .5) {    
+            throw new Error(`drift value must be between -.5 and .5`);
+        }
+        this.__x = x;
+        // TODO: notify
+    }
+    
+    get x() {
+        return this.__x;
+    }
+
+    setY(y) {
+        if (this.__y === y) {
+            return;
+        }
+        const driftY = y - this.__anchorY;
+        if (driftY < -.5 || driftY > .5) {    
+            throw new Error(`drift value must be between -.5 and .5`);
+        }
+        this.__y = y;
+        // TODO: notify
+    }
+    
+    get y() {
+        return this.__y;
+    }
+    
+    setZ(z) {
+        if (this.__z === z) {
+            return;
+        }
+        const driftZ = z - this.__anchorZ;
+        if (driftZ < -.5 || driftZ > .5) {    
+            throw new Error(`drift value must be between -.5 and .5`);
+        }
+        this.__z = z;
+        // TODO: notify
+    }
+    
+    get z() {
+        return this.__z;
+    }
+    
+    constructor(grid, anchorX, anchorY, anchorZ) {
+        this.__grid = grid;
+        this._index = -1; // set by parent grid
+        this.__anchorX = anchorX;
+        this.__anchorY = anchorY;
+        this.__anchorZ = anchorZ;
+        this.__x = anchorX;
+        this.__y = anchorY;
+        this.__z = anchorZ;
+        this._someHalfEdge = null; 
     }
     
 }
 
 class Gem {
-    constructor(grid, x, y, z, unw, une, use, usw, dnw, dne, dse, dsw, center) {
-        this.grid = grid;
+
+    get grid() {
+        return this.__grid;
+    }
+
+    get index() {
+        return this._index;
+    }
+    
+    get nHalfShard() {
+        return this._nHalfShard;
+    }
+
+    get eHalfShard() {
+        return this._eHalfShard;
+    }
+    
+    get sHalfShard() {
+        return this._sHalfShard;
+    }
+    
+    get wHalfShard() {
+        return this._wHalfShard;
+    }
+    
+    get uHalfShard() {
+        return this._uHalfShard;
+    }
+    
+    get dHalfShard() {
+        return this._dHalfShard;
+    }
+
+    //
+    
+    _nuHalfEdge() {
+        return this._nHalfShard.baseHalfEdge4;    
+    }
+
+    _neHalfEdge() {
+        return this._nHalfShard.baseHalfEdge1;
+    }
+
+    _ndHalfEdge() {
+        return this._nHalfShard.baseHalfEdge2;
+    }
+    
+    _nwHalfEdge() {
+        return this._nHalfShard.baseHalfEdge3;
+    }
+    
+    _euHalfEdge() {
+        return this._eHalfShard.baseHalfEdge3;
+    }
+    
+    _edHalfEdge() {
+        return this._eHalfShard.baseHalfEdge1;
+    }
+    
+    _esHalfEdge() {
+        return this._eHalfShard.baseHalfEdge4;
+    }
+    
+    _suHalfEdge() {
+        return this._sHalfShard.baseHalfEdge3;
+    }
+    
+    _sdHalfEdge() {
+        return this._sHalfShard.baseHalfEdge1;
+    }
+    
+    _swHalfEdge() {
+        return this._sHalfShard.baseHalfEdge4;
+    }
+    
+    _wuHalfEdge() {
+        return this._wHalfShard.baseHalfEdge4;
+    }
+    
+    _wdHalfEdge() {
+        return this._wHalfShard.baseHalfEdge2;
+    }
+
+    //
+
+    _unHalfEdge() {
+        return this._uHalfShard.baseHalfEdge4;    
+    }
+
+    _enHalfEdge() {
+        return this._eHalfShard.baseHalfEdge2;
+    }
+
+    _dnHalfEdge() {
+        return this._dHalfShard.baseHalfEdge3;
+    }
+    
+    _wnHalfEdge() {
+        return this._wHalfShard.baseHalfEdge1;
+    }
+    
+    _ueHalfEdge() {
+        return this._uHalfShard.baseHalfEdge3;
+    }
+    
+    _deHalfEdge() {
+        return this._dHalfShard.baseHalfEdge4;
+    }
+    
+    _seHalfEdge() {
+        return this._sHalfShard.baseHalfEdge2;
+    }
+    
+    _usHalfEdge() {
+        return this._uHalfShard.baseHalfEdge2;
+    }
+    
+    _dsHalfEdge() {
+        return this._dHalfShard.baseHalfEdge1;
+    }
+    
+    _wsHalfEdge() {
+        return this._wHalfShard.baseHalfEdge3;
+    }
+    
+    _uwHalfEdge() {
+        return this._uHalfShard.baseHalfEdge1;
+    }
+    
+    _dwHalfEdge() {
+        return this._dHalfShard.baseHalfEdge2;
+    }
+    
+    //
+    
+    *_initialWitnessHalfEdges() {
+        yield this._neHalfEdge();
+        yield this._nwHalfEdge();
+        yield this._nuHalfEdge();
+        yield this._ndHalfEdge();
         
-        const nHalfShard = new HalfShard(this, une, dne, dnw, unw, center);
-        const eHalfShard = new HalfShard(this, dse, dne, une, use, center);
-        const sHalfShard = new HalfShard(this, dsw, dse, use, usw, center);
-        const wHalfShard = new HalfShard(this, unw, dnw, dsw, usw, center);
-        const uHalfShard = new HalfShard(this, unw, usw, use, une, center);
-        const dHalfShard = new HalfShard(this, dse, dsw, dnw, dne, center);
+        yield this._esHalfEdge();
+        yield this._euHalfEdge();
+        yield this._edHalfEdge();
+        
+        yield this._swHalfEdge();
+        yield this._suHalfEdge();
+        yield this._sdHalfEdge();
+        
+        yield this._wuHalfEdge();
+        yield this._wdHalfEdge();
+        
+        yield this._ndHalfEdge().nextHalfEdge; // north diagonal
+        yield this._enHalfEdge().nextHalfEdge; // east diagonal
+        yield this._seHalfEdge().nextHalfEdge; // south diagonal
+        yield this._wdHalfEdge().nextHalfEdge; // west diagonal
+        yield this._usHalfEdge().nextHalfEdge; // up diagonal
+        yield this._dwHalfEdge().nextHalfEdge; // down diagonal
+
+        yield this._neHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
+        yield this._nwHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
+        yield this._nuHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
+        yield this._ndHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
+
+        yield this._seHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
+        yield this._swHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
+        yield this._suHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
+        yield this._sdHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
+    }
+    
+    constructor(grid, unw, une, use, usw, dnw, dne, dse, dsw, center) {
+        this.__grid = grid;
+        this._index = -1; // set by parent grid
+        
+        const nHalfShard = new HalfShard(grid, this, une, dne, dnw, unw, center);
+        const eHalfShard = new HalfShard(grid, this, dse, dne, une, use, center);
+        const sHalfShard = new HalfShard(grid, this, dsw, dse, use, usw, center);
+        const wHalfShard = new HalfShard(grid, this, unw, dnw, dsw, usw, center);
+        const uHalfShard = new HalfShard(grid, this, unw, usw, use, une, center);
+        const dHalfShard = new HalfShard(grid, this, dse, dsw, dnw, dne, center);
         
         const [nHS_eHF, nHS_dHF, nHS_wHF, nHS_uHF] = nHalfShard._initialSideHalfFaces();
         const [eHS_dHF, eHS_nHF, eHS_uHF, eHS_sHF] = eHalfShard._initialSideHalfFaces();
@@ -309,64 +842,124 @@ class Gem {
         const [uHS_wHF, uHS_sHF, uHS_eHF, uHS_nHF] = uHalfShard._initialSideHalfFaces();
         const [dHS_sHF, dHS_wHF, dHS_nHF, dHS_eHF] = dHalfShard._initialSideHalfFaces();
         
-        nHS_eHF._connectWithOpposite(eHS_nHF);
-        nHS_dHF._connectWithOpposite(dHS_nHF);
-        nHS_wHF._connectWithOpposite(wHS_nHF);
-        nHS_uHF._connectWithOpposite(uHS_nHF);
+        nHS_eHF._connectWithOpposite(grid, eHS_nHF);
+        nHS_dHF._connectWithOpposite(grid, dHS_nHF);
+        nHS_wHF._connectWithOpposite(grid, wHS_nHF);
+        nHS_uHF._connectWithOpposite(grid, uHS_nHF);
         
-        eHS_dHF._connectWithOpposite(dHS_eHF);
-        eHS_nHF._connectWithOpposite(nHS_eHF);
-        eHS_uHF._connectWithOpposite(uHS_eHF);
-        eHS_sHF._connectWithOpposite(sHS_eHF);
+        eHS_dHF._connectWithOpposite(grid, dHS_eHF);
+        eHS_nHF._connectWithOpposite(grid, nHS_eHF);
+        eHS_uHF._connectWithOpposite(grid, uHS_eHF);
+        eHS_sHF._connectWithOpposite(grid, sHS_eHF);
         
-        sHS_wHF._connectWithOpposite(wHS_sHF);
-        sHS_dHF._connectWithOpposite(dHS_sHF);
-        sHS_eHF._connectWithOpposite(eHS_sHF);
-        sHS_uHF._connectWithOpposite(uHS_sHF);
+        sHS_wHF._connectWithOpposite(grid, wHS_sHF);
+        sHS_dHF._connectWithOpposite(grid, dHS_sHF);
+        sHS_eHF._connectWithOpposite(grid, eHS_sHF);
+        sHS_uHF._connectWithOpposite(grid, uHS_sHF);
        
-        wHS_nHF._connectWithOpposite(nHS_wHF);
-        wHS_dHF._connectWithOpposite(dHS_wHF);
-        wHS_sHF._connectWithOpposite(sHS_wHF);
-        wHS_uHF._connectWithOpposite(uHS_wHF);
+        wHS_nHF._connectWithOpposite(grid, nHS_wHF);
+        wHS_dHF._connectWithOpposite(grid, dHS_wHF);
+        wHS_sHF._connectWithOpposite(grid, sHS_wHF);
+        wHS_uHF._connectWithOpposite(grid, uHS_wHF);
         
-        uHS_wHF._connectWithOpposite(wHS_uHF);
-        uHS_sHF._connectWithOpposite(sHS_uHF);
-        uHS_eHF._connectWithOpposite(eHS_uHF);
-        uHS_nHF._connectWithOpposite(nHS_uHF);
+        uHS_wHF._connectWithOpposite(grid, wHS_uHF);
+        uHS_sHF._connectWithOpposite(grid, sHS_uHF);
+        uHS_eHF._connectWithOpposite(grid, eHS_uHF);
+        uHS_nHF._connectWithOpposite(grid, nHS_uHF);
         
-        dHS_sHF._connectWithOpposite(sHS_dHF);
-        dHS_wHF._connectWithOpposite(wHS_dHF);
-        dHS_nHF._connectWithOpposite(nHS_dHF);
-        dHS_eHF._connectWithOpposite(eHS_dHF);
+        dHS_sHF._connectWithOpposite(grid, sHS_dHF);
+        dHS_wHF._connectWithOpposite(grid, wHS_dHF);
+        dHS_nHF._connectWithOpposite(grid, nHS_dHF);
+        dHS_eHF._connectWithOpposite(grid, eHS_dHF);
 
-        this.nHalfShard = nHalfShard;
-        this.eHalfShard = eHalfShard;
-        this.sHalfShard = sHalfShard;
-        this.wHalfShard = wHalfShard;
-        this.uHalfShard = uHalfShard;
-        this.dHalfShard = dHalfShard;
+        this._nHalfShard = nHalfShard;
+        this._eHalfShard = eHalfShard;
+        this._sHalfShard = sHalfShard;
+        this._wHalfShard = wHalfShard;
+        this._uHalfShard = uHalfShard;
+        this._dHalfShard = dHalfShard;
+
+        // create internal edges
+
+        /*for (const halfEdge of nHalfShard._sideHalfEdges()) {
+            halfEdge._connectWithSiblings(grid);
+        }
+        for (const halfEdge of sHalfShard._sideHalfEdges()) {
+            halfEdge._connectWithSiblings(grid);
+        }*/
     }
 }
 
 
 class HalfShard {
+
+    get gem() {
+        return this.__gem;
+    }
     
-    constructor(gem, baseVertex1, baseVertex2, baseVertex3, baseVertex4, topVertex) {
-        this.gem = gem;
-        this.tetrahedron1 = new Tetrahedron(this, baseVertex1, baseVertex2, baseVertex3, topVertex);
-        this.tetrahedron2 = new Tetrahedron(this, baseVertex3, baseVertex4, baseVertex1, topVertex);
-        this.oppositeHalfShard = null;
-        this.shard = null;
+    get index() {
+        return this._index;
+    }
+    
+    tetrahedron1() {
+        return this._baseHalfEdge1.halfFace.tetrahedron;
+    }
+    
+    tetrahedron2() {
+        return this._baseHalfEdge2.halfFace.tetrahedron;
+    }
+    
+    get oppositeHalfShard() {
+        return this._oppositeHalfShard;
+    }
+    
+    get shard() {
+        return this._shard;
+    }
+    
+    constructor(grid, gem, baseVertex1, baseVertex2, baseVertex3, baseVertex4, topVertex) {
+        this.__gem = gem;
+        this._index = -1;
+
+        const tetrahedron1 = new Tetrahedron(grid, this, baseVertex1, baseVertex2, baseVertex3, topVertex);
+        const tetrahedron2 = new Tetrahedron(grid, this, baseVertex3, baseVertex4, baseVertex1, topVertex);
+        
+        //this.__tetrahedron1 = tetrahedron1;
+        //this.__tetrahedron2 = tetrahedron2;
+        
+        const baseHalfFace1 = tetrahedron1.baseHalfFace;
+        const baseHalfEdge1 = baseHalfFace1.firstHalfEdge;
+        const baseHalfEdge2 = baseHalfEdge1.nextHalfEdge;
+
+        const baseHalfFace2 = tetrahedron2.baseHalfFace;
+        const baseHalfEdge3 = baseHalfFace2.firstHalfEdge;
+        const baseHalfEdge4 = baseHalfEdge3.nextHalfEdge;
+
+        this._baseHalfEdge1 = baseHalfEdge1;
+        this._baseHalfEdge2 = baseHalfEdge2;
+        this._baseHalfEdge3 = baseHalfEdge3;
+        this._baseHalfEdge4 = baseHalfEdge4;
+        
+        this._oppositeHalfShard = null;
+        this._shard = null;
+        
+        grid._reportNewHalfShard(this); // sets this._index
     }
 
-    *_initialBaseHalfEdges() {
-        const tetrahedron1 = this.tetrahedron1;
+    *_sideHalfEdges() {
+        for (const baseHalfEdge of this._baseHalfEdges()) {
+            yield baseHalfEdge.neighbourHalfEdge.nextHalfEdge;
+        }
+    }
+    
+    *_baseHalfEdges() {
+        const tetrahedron1 = this.tetrahedron1();
         const baseHalfFace1 = tetrahedron1.baseHalfFace;
         let baseHalfEdge = baseHalfFace1.firstHalfEdge;
         yield baseHalfEdge;
         baseHalfEdge = baseHalfEdge.nextHalfEdge;
         yield baseHalfEdge;
-        const tetrahedron2 = this.tetrahedron2;
+        const tetrahedron2 = this.tetrahedron2();
         const baseHalfFace2 = tetrahedron2.baseHalfFace;
         baseHalfEdge = baseHalfFace2.firstHalfEdge;
         yield baseHalfEdge;
@@ -375,20 +968,19 @@ class HalfShard {
     }
     
     *_initialSideHalfFaces() {
-        for (const baseHalfEdge of this._initialBaseHalfEdges()) {
-            yield baseHalfEdge.face;
+        for (const baseHalfEdge of this._baseHalfEdges()) {
+            yield baseHalfEdge.halfFace;
         }
     }
 
-    
-    _connectWithOpposite(oppositeHalfShard) {
-        const tetrahedron1 = this.tetrahedron1;
-        const tetrahedron2 = this.tetrahedron2;
+    _connectWithOpposite(grid, oppositeHalfShard) {
+        const tetrahedron1 = this.tetrahedron1();
+        const tetrahedron2 = this.tetrahedron2();
         const baseHalfFace1 = tetrahedron1.baseHalfFace;
         const baseHalfFace2 = tetrahedron1.baseHalfFace;
 
-        const oppositeTetrahedron1 = oppositeHalfShard.tetrahedron1;
-        const oppositeTetrahedron2 = oppositeHalfShard.tetrahedron2;
+        const oppositeTetrahedron1 = oppositeHalfShard.tetrahedron1();
+        const oppositeTetrahedron2 = oppositeHalfShard.tetrahedron2();
         const oppositeBaseHalfFace1 = oppositeTetrahedron1.baseHalfFace;
         const oppositeBaseHalfFace2 = oppositeTetrahedron2.baseHalfFace;
         
@@ -396,37 +988,37 @@ class HalfShard {
             if (!baseHalfFace2._canBeOppositeTo(oppositeBaseHalfFace2)) {
                 throw new Error(`invariant violation: shard base halfFaces don't match`);
             }
-            baseHalfFace1._connectWithOpposite(oppositeBaseHalfFace1);
-            baseHalfFace2._connectWithOpposite(oppositeBaseHalfFace2);
+            baseHalfFace1._connectWithOpposite(grid, oppositeBaseHalfFace1);
+            baseHalfFace2._connectWithOpposite(grid, oppositeBaseHalfFace2);
         } else if (baseHalfFace1._canBeOppositeTo(oppositeBaseHalfFace2)) {
             if (!baseHalfFace2._canBeOppositeTo(oppositeBaseHalfFace1)) {
                 throw new Error(`invariant violation: shard base halfFaces don't match`);
             }
-            baseHalfFace1._connectWithOpposite(oppositeBaseHalfFace2);
-            baseHalfFace2._connectWithOpposite(oppositeBaseHalfFace1);
+            baseHalfFace1._connectWithOpposite(grid, oppositeBaseHalfFace2);
+            baseHalfFace2._connectWithOpposite(grid, oppositeBaseHalfFace1);
         }
 
         this.oppositeHalfShard = oppositeHalfShard;
         oppositeHalfShard.oppositeHalfShard = this;
         
-        const shard = new Shard(this);
+        const shard = new Shard(grid, this);
         this.shard = shard;
         oppositeHalfShard.shard = shard;
     }
 
-    _terminateAsBoundary() {
-        const shard = new Shard(this);
+    _terminateAsBoundary(grid) {
+        const shard = new Shard(grid, this);
         this.shard = shard;        
     }
 
     _halfEdgeForVertices(sourceVertex, targetVertex) {
-        const tetrahedron1 = this.tetrahedron1;
+        const tetrahedron1 = this.tetrahedron1();
         const baseHalfFace1 = tetrahedron1.baseHalfFace;
         const firstAttemptHalfEdge = baseHalfFace1._halfEdgeForVerticesOrNull(sourceVertex, targetVertex);
         if (firstAttemptHalfEdge !== null) {
             return firstAttemptHalfEdge;
         }
-        const tetrahedron2 = this.tetrahedron2;
+        const tetrahedron2 = this.tetrahedron2();
         const baseHalfFace2 = tetrahedron2.baseHalfFace;
         return baseHalfFace2._halfEdgeForVertices(sourceVertex, targetVertex);
     }
@@ -443,19 +1035,19 @@ class HalfShard {
          * Note that, for any convex half-shard, there are, in general, two possible orientations for their
          * shared, triangular, face.
          *
-         * Moreover, for a non-convex half-shard that has its corner vertices perturbed but still linearly
+         * Moreover, for a non-convex half-shard that has its corner vertices perturbed but is still linearly
          * separated on the grid (like a 3D-chevron shape) there will be one possible well-formed orientation 
-         * that properly tetrahedralizes the volume.
+         * that properly tetrahedralizes the volume [TODO: is this true?]   
          *
-         * This is deep surgery: to visualize, draw the two tetrahedrons with their joined quadrilateral 
-         * base flat in the center of the page and the 4 exposed triangular side-faces folded outwards 
-         * like a four-pointed star.
+         * To visualize the code in this method, it's recommended to use pen and paper: draw the two 
+         * tetrahedrons with their joined quadrilateral base flat in the center and then draw the 4 
+         * exposed triangular side-faces folded outwards like a four-pointed star.
          *
          * The two faces that are shared between the two tetrahedrons (the ones that are actually
          * being flipped) then need to be drawn flat, separately, and imagined to be sticking up from
          * the page at the diagonal that is to be flipped.
          *
-         * Visualizing flat like that is nescesary for understanding this code. First, annotate all
+         * Visualizing flat like that is the recommended way of understanding this code. First, annotate all
          * the halfedges and write their labels. Next, step through the code and refer to the diagram
          * repeatedly. While doing so, mentally "glue" the two separate faces onto the diagonal and fold 
          * the tetrahedrons back together around them.
@@ -488,8 +1080,8 @@ class HalfShard {
          * understanding this code (unless you're a savant or ASI of course).
          */
         
-        const tetrahedron1 = this.tetrahedron1;
-        const tetrahedron2 = this.tetrahedron2;
+        const tetrahedron1 = this.tetrahedron1();
+        const tetrahedron2 = this.tetrahedron2();
         
         const baseHalfFace1 = tetrahedron1.baseHalfFace;
         const baseHalfFace2 = tetrahedron2.baseHalfFace;
@@ -556,8 +1148,8 @@ class HalfShard {
         baseHalfEdge23.nextHalfEdge = baseHalfEdge13;
         baseHalfEdge13.nextHalfEdge = baseHalfEdge12;
 
-        baseHalfEdge11.halfFace.halfEdge1 = baseHalfEdge12;
-        baseHalfEdge23.halfFace.halfEdge1 = baseHalfEdge24;
+        baseHalfEdge11.halfFace._halfEdge1 = baseHalfEdge12;
+        baseHalfEdge23.halfFace._halfEdge1 = baseHalfEdge24;
         
         baseHalfEdge11.halfFace = baseHalfEdge21.halfFace;
         baseHalfEdge23.halfFace = baseHalfEdge13.halfFace;
@@ -584,49 +1176,82 @@ class HalfShard {
 
 class Shard {
     
-    constructor(someHalfShard) {
-        this.someHalfShard = someHalfShard;
-        this.diagonalEdge = null;
-        this.flipped = false;
+    get index() {
+        return this._index;
+    }
+    
+    get someHalfShard() {
+        return this._someHalfShard;
+    }
+
+    isFlipped() {
+        return this.__flipped;
+    }
+    
+    constructor(grid, someHalfShard) {
+        this._index = -1;
+        this.__someHalfShard = someHalfShard;
+        this.__flipped = false;
+        
+        grid._reportNewShard(this); // sets this._index
     }
 
     setFlipped(flipped) {
-		if (flipped !== this.flipped) {
+		if (flipped !== this.__flipped) {
 			this.flip();
 		}
 	}
 	
 	flip() {
         const halfShard1 = this.someHalfShard;
-        halfShard1._flip)();
+        halfShard1._flip();
         const halfShard2 = halfShard1.oppositeHalfShard;
         if (halfShard2 !== null) {
             halfShard2._flip();
         }
-        this.flipped = !this.flipped;
+        this.__flipped = !this.__flipped;
     }
     
 }
 
 class Tetrahedron {
 
-    constructor(halfShard, baseVertex1, baseVertex2, baseVertex3, topVertex) {
-        this.halfShard = halfShard;
-        const baseHalfFace = new HalfFace(this, baseVertex1, baseVertex2, baseVertex3);
-        const sideHalfFace1 = new HalfFace(this, baseVertex2, baseVertex1, topVertex);
-        const sideHalfFace2 = new HalfFace(this, baseVertex3, baseVertex2, topVertex);
-        const sideHalfFace3 = new HalfFace(this, baseVertex1, baseVertex3, topVertex);
+    get halfShard() {
+        return this.__halfShard;
+    }
+    
+    get index() {
+        return this._index;
+    }
+
+    get baseHalfFace() {
+        return this.__baseHalfFace;
+    }
+    
+    constructor(grid, halfShard, baseVertex1, baseVertex2, baseVertex3, topVertex) {
+        this.__halfShard = halfShard;
+        this._index = -1;
+        
+        const baseHalfFace = new HalfFace(grid, this, baseVertex1, baseVertex2, baseVertex3);
+        const sideHalfFace1 = new HalfFace(grid, this, baseVertex2, baseVertex1, topVertex);
+        const sideHalfFace2 = new HalfFace(grid, this, baseVertex3, baseVertex2, topVertex);
+        const sideHalfFace3 = new HalfFace(grid, this, baseVertex1, baseVertex3, topVertex);
+        
         const [bhe1, bhe2, bhe3] = baseHalfFace._halfEdges();
         const [s1he1, s1he2, s1he3] = sideHalfFace1._halfEdges();
         const [s2he1, s2he2, s2he3] = sideHalfFace2._halfEdges();
         const [s3he1, s3he2, s3he3] = sideHalfFace3._halfEdges();
+        
         bhe1._connectWithNeighbour(s1he1);
         bhe2._connectWithNeighbour(s2he1);
         bhe3._connectWithNeighbour(s3he1);
         s1he2._connectWithNeighbour(s3he3);
         s2he2._connectWithNeighbour(s1he3);
         s3he2._connectWithNeighbour(s2he3);
-        this.baseHalfFace = baseHalfFace;
+        
+        this.__baseHalfFace = baseHalfFace;
+
+        grid._reportNewTetrahedron(this); // sets this._index
     }
 
     *halfFaces() {
@@ -640,28 +1265,42 @@ class Tetrahedron {
         yield currHalfEdge.neighbourHalfEdge.halfFace;
     }
     
-    _halfFaceForVertices(vertexA, vertexB, vertexC) {
+    /*_halfFaceForVertices(vertexA, vertexB, vertexC) {
         for (const halfFace of this.halfFaces()) {
             if (halfFace._matchesVertices(vertexA, vertexB, vertexC)) {
                 return halfFace;
             }
         }
         throw new Error(`invariant violation: no halfFace matching given vertices`);
-    }
+    }*/
 }
 
 class HalfFace {
 
-    constructor(tetrahedron, vertex1, vertex2, vertex3) {
-        this.tetrahedron = tetrahedron;
-        const halfEdge1 = new HalfEdge(this, vertex1);
-        const halfEdge2 = new HalfEdge(this, vertex2);
-        const halfEdge2 = new HalfEdge(this, vertex3);
+    get tetrahedron() {
+        return this.__tetrahedron;
+    }
+    
+    get index() {
+        return this._index;
+    }
+
+    get firstHalfEdge() {
+        return this._halfEdge1;
+    }
+    
+    constructor(grid, tetrahedron, vertex1, vertex2, vertex3) {
+        this.__tetrahedron = tetrahedron;
+        this._index = -1;
+        const halfEdge1 = new HalfEdge(grid, this, vertex1);
+        const halfEdge2 = new HalfEdge(grid, this, vertex2);
+        const halfEdge2 = new HalfEdge(grid, this, vertex3);
         halfEdge1.nextHalfEdge = halfEdge2;
         halfEdge2.nextHalfEdge = halfEdge3;
         halfEdge3.nextHalfEdge = halfEdge1;
-        this.halfEdge1 = halfEdge1;
-        this.face = null;
+        this._halfEdge1 = halfEdge1;
+        this._face = null;
+        grid._reportNewHalfFace(this);
     }
 
     *halfEdges() {
@@ -753,7 +1392,7 @@ class HalfFace {
         return false;
     }
     
-    _connectWithOpposite(oppositeHalfFace) {
+    _connectWithOpposite(grid, oppositeHalfFace) {
         const [myVertex1, myVertex2, myVertex3] = this.vertices();
         /* start: defensive */
         const [oppVertexA, oppVertexB, oppVertexC] = oppositeHalfFace.vertices();
@@ -782,7 +1421,7 @@ class HalfFace {
         this._halfEdgeForVertices(myVertex3, myVertex1)
             ._connectWithOpposite(oppositeHalfFace
                                   ._halfEdgeForVertices(myVertex1, myVertex3));
-        const face = new Face(this);
+        const face = new Face(grid, this);
         if (this.face !== null) {
             throw new Error(`invariant violation: face set twice`);
         }
@@ -796,21 +1435,62 @@ class HalfFace {
 
 class Face {
 
-    constructor(someHalfFace) {
-        this.someHalfFace = someHalfFace;
+    get someHalfFace() {
+        return this.__someHalfFace;
+    }
+    
+    get index() {
+        return this._index;
+    }
+    
+    constructor(grid, someHalfFace) {
+        this._index = -1;
+        this.__someHalfFace = someHalfFace;
+        
+        grid._reportNewFace(this);
     }
     
 }
 
 class HalfEdge {
 
-    constructor(halfFace, sourceVertex) {
-        this.halfFace = halfFace;
-        this.sourceVertex = sourceVertex; 
-        this.nextHalfEdge = null;
-        this.neighbourHalfEdge = null;
-        this.oppositeHalfEdge = null;
-        this.edge = null;
+    get halfFace() {
+        return this._halfFace;
+    }
+    
+    get index() {
+        return this._index;
+    }
+
+    get sourceVertex() {
+        return this._sourceVertex;
+    }
+
+    get nextHalfEdge() {
+        return this._nextHalfEdge;
+    }
+
+    get neighbourHalfEdge() {
+        return this._neighbourHalfEdge;
+    }
+
+    get oppositeHalfEdge() {
+        return this._oppositeHalfEdge;
+    }
+    
+    get edge() {
+        return this._edge;
+    }
+    
+    constructor(grid, halfFace, sourceVertex) {
+        this._halfFace = halfFace;
+        this._index = -1;
+        this._sourceVertex = sourceVertex; 
+        this._nextHalfEdge = null;
+        this._neighbourHalfEdge = null;
+        this._oppositeHalfEdge = null;
+        this._edge = null;
+        grid._reportNewHalfEdge(this);
     }
 
     _matchesVertices(sourceVertex, targetVertex) {
@@ -835,7 +1515,7 @@ class HalfEdge {
     _connectWithOpposite(oppositeHalfEdge) {
         this.oppositeHalfEdge = oppositeHalfEdge;
         oppositeHalfEdge.oppositeHalfEdge = this;
-        const edge = new Edge(this);
+        /*const edge = new Edge(grid, this);
         if (this.edge !== null) {
             throw new Error(`invariant violation: edge set twice`);
         }
@@ -843,18 +1523,71 @@ class HalfEdge {
         if (oppositeHalfEdge.edge !== null) {
             throw new Error(`invariant violation: edge set twice`);
         }
-        oppositeHalfEdge.edge = edge;
+        oppositeHalfEdge.edge = edge;*/
+    }
+
+    _connectWithSiblings(grid) {
+        if (this.edge !== null) {
+            throw new Error(`invariant violation: halfEdge already connected with siblings through common edge`);
+        }
+        
+        let startHalfEdge = this;
+        do {
+            const oppositeHalfEdge = startHalfEdge.oppositeHalfEdge;
+            if (oppositeHalfEdge === null) {
+                break;
+            }
+            startHalfEdge = oppositeHalfEdge.neighbourHalfEdge;
+        } while (startHalfEdge !== this);
+        
+        let endHalfEdge = this.neighbourHalfEdge;
+        do {
+            const oppositeHalfEdge = endHalfEdge.oppositeHalfEdge;
+            if (oppositeHalfEdge === null) {
+                break;
+            }
+            endHalfEdge = oppositeHalfEdge.neighbourHalfEdge;
+        } while (endHalfEdge !== this.neighbourHalfEdge);
+
+        const vertex = startHalfEdge.sourceVertex;
+        if (vertex1.someOutgoingHalfEdge === null) {
+            vertex1.someOutgoingHalfEdge = startHalfEdge;
+        }
+        
+        const vertex2 = endHalfEdge.sourceVertex;
+        if (vertex2.someOutgoingHalfEdge === null) {
+            vertex2.someOutgoingHalfEdge = endHalfEdge;
+        }
+        
+        const edge = new Edge(grid, this);
+        let currHalfEdge = startHalfEdge;
+        do {
+            currHalfEdge.edge = edge;
+            currHalfEdge = currHalfEdge.neighbourHalfEdge;
+            currHalfEdge.edge = edge;
+            currHalfEdge = currHalfEdge.oppositeHalfEdge;
+        } while (currHalfEdge !== null && currHalfEdge !== startHalfEdge);
     }
 }
 
 class Edge {
 
-    constructor(startHalfEdge) {
-        this.startHalfEdge = startHalfEdge; // chosen so that the iterator below is exhaustive
+    get someHalfEdge() {
+        return this._startHalfEdge;
+    }
+    
+    get index() {
+        return this._index;
+    }
+    
+    constructor(grid, startHalfEdge) {
+        this._startHalfEdge = startHalfEdge; // chosen so that the iterator below is exhaustive
+        this._index = -1;
+        grid._reportNewEdge(this);
     }
 
     *halfEdges() {
-        const startHalfEdge = this.startHalfEdge;
+        const startHalfEdge = this._startHalfEdge;
         let currHalfEdge = startHalfEdge;
         do {
             yield currHalfEdge;
