@@ -461,7 +461,7 @@ class Vertex {
         this.__x = anchorX;
         this.__y = anchorY;
         this.__z = anchorZ;
-        this._someHalfEdge = null; 
+        this._someGeneratingOutgoingHalfEdge = null; 
     }
     
 }
@@ -1133,25 +1133,6 @@ class HalfFace {
         currHalfEdge = currHalfEdge.nextHalfEdge;
         yield currHalfEdge;
     }
-    
-    _matchesVertices(vertexA, vertexB, vertexC) {
-        for (const halfEdge of this.halfEdges()) {
-            if (halfEdge.sourceVertex === vertexA) {
-                const nextHalfEdge = halfEdge.nextHalfEdge;
-                if (nextHalfEdge.sourceVertex === vertexB) {
-                    const nextNextHalfEdge = nextHalfEdge.nextHalfEdge;
-                    if (nextNextHalfEdge.sourceVertex === vertexC) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-        }
-        return false;
-    }
 
     _halfEdgeForVerticesOrNull(sourceVertex, targetVertex) {
         for (const halfEdge of this.halfEdges()) {
@@ -1168,26 +1149,6 @@ class HalfFace {
             return halfEdge;
         }
         throw new Error(`invariant violation: no halfEdge matching given vertices`);
-    }
-
-    halfEdge2() {
-        return this.halfEdge1.nextHalfEdge;
-    }
-    
-    halfEdge3() {
-        return this.halfEdge2().nextHalfEdge;
-    }
-    
-    vertex1() {
-        return this.halfEdge1.sourceVertex;
-    }
-    
-    vertex2() {
-        return this.halfEdge2().sourceVertex;
-    }
-    
-    vertex3() {
-        return this.halfEdge3().sourceVertex;
     }
     
     *vertices() {
@@ -1220,26 +1181,6 @@ class HalfFace {
     
     _connectWithOpposite(grid, oppositeHalfFace) {
         const [myVertex1, myVertex2, myVertex3] = this.vertices();
-        /* 
-        // start: defensive
-        const [oppVertexA, oppVertexB, oppVertexC] = oppositeHalfFace.vertices();
-        if (myVertex1 === oppVertexA) {
-            if (oppVertexB !== myVertex3 || oppVertexC !== myVertex2) {
-                throw new Error(`invariant violation: opposite face vertices cannot be matched`);
-            }
-        } else if (myVertex1 === oppVertexB) {
-            if (oppVertexC !== myVertex1 || oppVertexA !== myVertex2) {
-                throw new Error(`invariant violation: opposite face vertices cannot be matched`);
-            }
-        } else if (myVertex1 === oppVertexC) {
-            if (oppVertexA !== myVertex3 || oppVertexB !== myVertex2) {
-                throw new Error(`invariant violation: opposite face vertices cannot be matched`);
-            }
-        } else {
-            throw new Error(`invariant violation: opposite face vertices cannot be matched`);
-        }
-        // end: defensive 
-        */
         this._halfEdgeForVertices(myVertex1, myVertex2)
                 ._connectWithOpposite(oppositeHalfFace
                                       ._halfEdgeForVertices(myVertex2, myVertex1));
@@ -1311,9 +1252,9 @@ class HalfEdge {
     }
     
     constructor(grid, halfFace, sourceVertex) {
-        this._halfFace = halfFace;
+        this._halfFace = halfFace; // must be package-public because of flipping
         this._index = -1;
-        this._sourceVertex = sourceVertex; 
+        this._sourceVertex = sourceVertex; // must be package-public because of flipping
         this._nextHalfEdge = null;
         this._neighbourHalfEdge = null;
         this._oppositeHalfEdge = null;
@@ -1343,15 +1284,6 @@ class HalfEdge {
     _connectWithOpposite(oppositeHalfEdge) {
         this.oppositeHalfEdge = oppositeHalfEdge;
         oppositeHalfEdge.oppositeHalfEdge = this;
-        /*const edge = new Edge(grid, this);
-        if (this.edge !== null) {
-            throw new Error(`invariant violation: edge set twice`);
-        }
-        this.edge = edge;
-        if (oppositeHalfEdge.edge !== null) {
-            throw new Error(`invariant violation: edge set twice`);
-        }
-        oppositeHalfEdge.edge = edge;*/
     }
 
     _connectWithSiblingsAndVertices(grid) {
@@ -1378,16 +1310,16 @@ class HalfEdge {
         } while (endHalfEdge !== this.neighbourHalfEdge);
 
         const vertex = startHalfEdge.sourceVertex;
-        if (vertex1.someOutgoingHalfEdge === null) {
-            vertex1.someOutgoingHalfEdge = startHalfEdge;
+        if (vertex1._someGeneratingOutgoingHalfEdge === null) {
+            vertex1._someGeneratingOutgoingHalfEdge = startHalfEdge;
         }
         
         const vertex2 = endHalfEdge.sourceVertex;
-        if (vertex2.someOutgoingHalfEdge === null) {
-            vertex2.someOutgoingHalfEdge = endHalfEdge;
+        if (vertex2._someGeneratingOutgoingHalfEdge === null) {
+            vertex2._someGeneratingOutgoingHalfEdge = endHalfEdge;
         }
         
-        const edge = new Edge(grid, this);
+        const edge = new Edge(grid, startHalfEdge);
         let currHalfEdge = startHalfEdge;
         do {
             currHalfEdge.edge = edge;
@@ -1401,22 +1333,22 @@ class HalfEdge {
 class Edge {
 
     get someHalfEdge() {
-        return this._startHalfEdge;
+        return this.__someGeneratingHalfEdge;
     }
     
     get index() {
         return this._index;
     }
     
-    constructor(grid, startHalfEdge) {
-        this._startHalfEdge = startHalfEdge; // chosen so that the iterator below is exhaustive
+    constructor(grid, someGeneratingHalfEdge) {
+        this.__someGeneratingHalfEdge = someGeneratingHalfEdge; // chosen so that the iterator below is exhaustive
         this._index = -1;
         grid._reportNewEdge(this);
     }
 
     *halfEdges() {
-        const startHalfEdge = this._startHalfEdge;
-        let currHalfEdge = startHalfEdge;
+        const startHalfEdge = this.__someGeneratingHalfEdge;
+        let currHalfEdge = someGeneratingHalfEdge;
         do {
             yield currHalfEdge;
             const neighbourHalfEdge = currHalfEdge.neighbour;
