@@ -132,56 +132,80 @@ class CavernGrid {
         this.__height = height;
         this.__depth = depth;
 
-        const widthPlusOne = width + 1;
-        const heightPlusOne = height + 1;
-        const depthPlusOne = depth + 1;
         
         const numberOfGems = width * height * depth;
         const gems = new Array(numberOfGems);
         this.__gems = gems;
         
         const numberOfCenterVertices = numberOfGems;
-        const numberOfCornerVertices = widthPlusOne * heightPlusOne * depthPlusOne;
-        const numberOfVertices = numberOfCenterVertices + numberOfCornerVertices;
+        
+        const widthPlusOne = width + 1;
+        const heightPlusOne = height + 1;
+        const depthPlusOne = depth + 1;
+        
+        const numberOfCornerVertices = 
+            widthPlusOne * heightPlusOne * depthPlusOne;
+        
+        const numberOfVertices = 
+            numberOfCenterVertices + numberOfCornerVertices;
         const vertices = new Array(numberOfVertices);
         this.__vertices = vertices;
+
+        const numberOfSidesPerGem = 6; // north, east, south, west, up, down
+        const numberOfGemSides = 
+            numberOfGems * numberOfSidesPerGem;
         
-        const numberOfHalfShardsPerGem = 6;
-        const numberOfHalfShards = numberOfHalfShardsPerGem * numberOfGems;
+        const numberOfHalfShards = numberOfGemSides;
         this.__halfShards = new Array(numberOfHalfShards);
         this.__halfShardIndex = 0;
 
-        const numberOfTetrahedronsPerHalfShard = 2;
-        const numberOfTetrahedrons = numberOfHalfShards * numberOfTetrahedronsPerHalfShard;
+        const numberOfTetrahedronsPerHalfShard = 2; // a halfshard is a perturbed quadrilateral 
+                                                    // pyramid made up of two tetradedrons that
+                                                    // share a single face. Note that the per-
+                                                    // turbation of the quadrialateral may
+                                                    // imply the pyramid is not convex (it may,
+                                                    // under certain conditions, look more like
+                                                    // a 3D-chevron shape)
+        const numberOfTetrahedrons = 
+            numberOfHalfShards * numberOfTetrahedronsPerHalfShard;
         this.__tetrahedrons = new Array(numberOfTetrahedrons);
         this.__tetrahedronIndex = 0;
 
         const numberOfHalfFacesPerTetrahedron = 4;
-        const numberOfHalfFaces = numberOfTetrahedrons * numberOfHalfFacesPerTetrahedron;
+        const numberOfHalfFaces = 
+            numberOfTetrahedrons * numberOfHalfFacesPerTetrahedron;
         this.__halfFaces = new Array(numberOfHalfFaces);
         this.__halfFaceIndex = 0;
 
         const numberOfHalfEdgesPerHalfFace = 3;
-        const numberOfHalfEdges = numberOfHalfFaces * numberOfHalfEdgesPerHalfFace;
+        const numberOfHalfEdges = 
+            numberOfHalfFaces * numberOfHalfEdgesPerHalfFace;
         this.__halfEdges = new Array(numberOfHalfEdges);
         this.__halfEdgeIndex = 0;
         
-        const numberOfGemSides = numberOfHalfShards;
-        const numberOfBoundaryGemSides = 2 * (width * height) + 2 * (width * depth) + 2 * (height * depth);
-        const numberOfSharedGemSides = (numberOfGemSides - numberOfBoundaryGemSides) / 2;
-        const numberOfShards = numberOfBoundaryGemSides + numberOfSharedGemSides;
+        const numberOfBoundaryGemSides = 
+            2 * (width * height) + /*  up and down boundary planes of the grid */
+            2 * (width * depth) + /*  north and south boundary planes of the grid */
+            2 * (height * depth); /*  east and west boundary planes of the grid */
+        const numberOfSharedGemSides = 
+            (numberOfGemSides - numberOfBoundaryGemSides) / 2;
+        const numberOfShards = 
+            numberOfBoundaryGemSides + numberOfSharedGemSides;
         this.__shards = new Array(numberOfShards);
         this.__shardIndex = 0;
         
-        const numberOfInternalGemFaces = 8;
-        const numberOfExternalGemFacesPerSide = 2;
+        const numberOfInternalGemFaces = 
+            numberOfGems * (2 * (4 + 1)); // two halves consisting of four sides & one diagonal
+        const numberOfExternalGemFaces = 
+            numberOfGems * 2;
         const numberOfFaces = 
-            numberOfShards * numberOfExternalGemFacesPerSide + 
-            numberOfGems * numberOfInternalGemFaces;
+            numberOfExternalGemFaces 
+            + numberOfInternalGemFaces;
         this.__faces = new Array(numberOfFaces);
         this.__faceIndex = 0;
         
-        const numberOfInternalGemEdges = numberOfGems * 8;
+        const numberOfInternalGemEdges = 
+            numberOfGems * (2 * 4); // four side-edges of two opposing quadrialateral pyramids
         const numberOfExternalGemEdges = 
             depthPlusOne * widthPlusOne * height // level edges in y-direction
             + depthPlusOne * heightPlusOne * width // level edges in x-direction
@@ -189,7 +213,9 @@ class CavernGrid {
             + widthPlusOne * height * depth // diagonal edges in x-direction
             + width * heightPlusOne * depth // diagonal edges in y-direction
             + width * height * depthPlusOne // diagonal edges in z-direction
-        const numberOfGemEdges = numberOfInternalGemEdges + numberOfExternalGemEdges;
+        const numberOfGemEdges = 
+            numberOfInternalGemEdges 
+            + numberOfExternalGemEdges;
         this.__edges = new Array(numberOfGemEdges);
         this.__edgeIndex = 0;
         
@@ -274,6 +300,7 @@ class CavernGrid {
                     if (x === 0) {
                         unwGem._wHalfShard._terminateAsBoundary(grid);
                     }
+                    
                     if (x < widthMinusOne) {
                         const uneIndex = unffset + eOffset;
                         const uneGem = gems[uneIndex];
@@ -285,6 +312,7 @@ class CavernGrid {
                     if (y === 0) {
                         unwGem._nHalfShard._terminateAsBoundary(grid);
                     }
+                    
                     if (y < heightMinusOne) {
                         const uswIndex = usOffset + wOffset;
                         const uswGem = gems[uswIndex];
@@ -296,6 +324,7 @@ class CavernGrid {
                     if (z === 0) {
                         unwGem._uHalfShard._terminateAsBoundary(grid);
                     }
+                    
                     if (z < depthMinusOne) {
                         const dnwIndex = dnOffset + wOffset;
                         const dnwGem = gems[dnwIndex];
@@ -309,18 +338,10 @@ class CavernGrid {
         
         // create internal/external edges and connect vertices with outgoing halfedges
         
-        for (let z = 0; z < depth; z++) {
-            const zOffset = z * gemsArea;
-            for (let y = 0; y < height; y++) {
-                const zyOffset = zOffset + y * width;
-                for (let x = 0; x < width; x++) {
-                    const gem = gems[zyOffset + x];
-                    initialWitnessHalfEdges()
-                    for (const halfEdge of gem._initialWitnessHalfEdges()) {
-                        if (halfEdge.edge === null) {
-                            halfEdge._connectWithSiblings(this);
-                        }
-                    }
+        for (const gem of gems) {
+            for (const halfEdge of gem._initialWitnessHalfEdges()) {
+                if (halfEdge.edge === null) {
+                    halfEdge._connectWithSiblingsAndVertices(this);
                 }
             }
         }
@@ -813,15 +834,15 @@ class Gem {
         yield this._usHalfEdge().nextHalfEdge; // up diagonal
         yield this._dwHalfEdge().nextHalfEdge; // down diagonal
 
-        yield this._neHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
-        yield this._nwHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
-        yield this._nuHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
-        yield this._ndHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge
+        yield this._neHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge 1
+        yield this._nwHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge 2
+        yield this._nuHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge 3
+        yield this._ndHalfEdge().neighbourHalfEdge.nextHalfEdge; // north half internal edge 4
 
-        yield this._seHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
-        yield this._swHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
-        yield this._suHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
-        yield this._sdHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge
+        yield this._seHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge 1
+        yield this._swHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge 2
+        yield this._suHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge 3
+        yield this._sdHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge 4
     }
     
     constructor(grid, unw, une, use, usw, dnw, dne, dse, dsw, center) {
@@ -882,10 +903,10 @@ class Gem {
         // create internal edges
 
         /*for (const halfEdge of nHalfShard._sideHalfEdges()) {
-            halfEdge._connectWithSiblings(grid);
+            halfEdge._connectWithSiblingsAndVertices(grid);
         }
         for (const halfEdge of sHalfShard._sideHalfEdges()) {
-            halfEdge._connectWithSiblings(grid);
+            halfEdge._connectWithSiblingsAndVertices(grid);
         }*/
     }
 }
@@ -1526,7 +1547,7 @@ class HalfEdge {
         oppositeHalfEdge.edge = edge;*/
     }
 
-    _connectWithSiblings(grid) {
+    _connectWithSiblingsAndVertices(grid) {
         if (this.edge !== null) {
             throw new Error(`invariant violation: halfEdge already connected with siblings through common edge`);
         }
