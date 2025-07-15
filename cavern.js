@@ -335,6 +335,62 @@ class CavernGrid {
             }
         }
     }
+
+    _dump(outputLine, indent) {
+		const nextIndent = indent + "    ";
+        
+		outputLine(indent + "CavernGrid {");
+        
+		outputLine(indent + "  vertices: [");
+		for (const vertex of this.__vertices) {
+			vertex._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+
+        outputLine(indent + "  gems: [");
+		for (const gem of this.__gems) {
+			gem._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+
+        outputLine(indent + "  halfShards: [");
+		for (const halfShard of this.__halfShards) {
+			halfShard._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+        
+		outputLine(indent + "  shards: [");
+		for (const shard of this.__shards) {
+			shard._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],");
+
+        outputLine(indent + "  halfFaces: [");
+		for (const halfFace of this.__halfFaces) {
+			halfFace._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+        
+		outputLine(indent + "  faces: [");
+		for (const face of this.__faces) {
+			face._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+        
+		outputLine(indent + "  halfEdges: [");
+		for (const halfEdge of this.__halfEdges) {
+			halfEdge._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+        
+		outputLine(indent + "  edges: [");
+		for (const edge of this.__edges) {
+			edge._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+        
+		outputLine(indent + "}");
+	}
 }
 
 class Vertex {
@@ -463,7 +519,12 @@ class Vertex {
         this.__z = anchorZ;
         this._someGeneratingOutgoingHalfEdge = null; 
     }
-    
+
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                   `V${this._index} (${this.__x}, ${this.__y}, ${this.__z}) ` +
+                   `h${this._someGeneratingOutgoingHalfEdge.index}`);
+    }
 }
 
 class Gem {
@@ -700,6 +761,18 @@ class Gem {
         this._wHalfShard = wHalfShard;
         this._uHalfShard = uHalfShard;
         this._dHalfShard = dHalfShard;
+    }
+
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `G${this._index} (` +
+                    `s${this._nHalfShard.index}, ` +
+                   `s${this._eHalfShard.index}, ` +
+                   `s${this._sHalfShard.index}, ` +
+                   `s${this._wHalfShard.index}, ` +
+                   `s${this._uHalfShard.index}, ` +
+                   `s${this._dHalfShard.index})` +
+                  );
     }
 }
 
@@ -1003,6 +1076,18 @@ class HalfShard {
         sideHalfEdge213.neighbourHalfEdge = sideHalfEdge242;
         sideHalfEdge242.neighbourHalfEdge = sideHalfEdge213;
     }
+
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `s${this._index} [G${this.gem}] (` +
+                    `e${this.__baseHalfEdge1.index}, ` +
+                    `e${this.__baseHalfEdge2.index}, ` +
+                    `e${this.__baseHalfEdge3.index}, ` +
+                    `e${this.__baseHalfEdge4.index}) (` +
+                    `T${this.__tetrahedron1.index}, ` +
+                    `T${this.__tetrahedron2.index})`
+                  );
+    }
 }
 
 class Shard {
@@ -1042,7 +1127,14 @@ class Shard {
         }
         this.__flipped = !this.__flipped;
     }
-    
+
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `S${this._index} ` +
+                    `s${this.__someHalfShard.index} ` +
+                   `${this.__flipped ? "flipped" : ""}`
+                  );
+    }
 }
 
 class Tetrahedron {
@@ -1095,6 +1187,14 @@ class Tetrahedron {
         currHalfEdge = currHalfEdge.nextHalfEdge;
         yield currHalfEdge.neighbourHalfEdge.halfFace;
     }
+    
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `T${this._index} [s${this.halfShard.index}] ` +
+                    `f${this.__baseHalfFace.index}`
+                  );
+    }
+    
 }
 
 class HalfFace {
@@ -1200,6 +1300,14 @@ class HalfFace {
         }
         oppositeHalfFace.face = face;
     }
+
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `f${this._index} [T${this.tetrahedron.index}] ` +
+                    `e${this._firstHalfEdge.index} ` +
+                    `F${this._face.index}`
+                  );
+    }
 }
 
 class Face {
@@ -1219,6 +1327,12 @@ class Face {
         grid._reportNewFace(this);
     }
     
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `F${this._index} [T${this.tetrahedron.index}] ` +
+                    `f${this.__someHalfFace.index}`
+                  );
+    }
 }
 
 class HalfEdge {
@@ -1328,6 +1442,17 @@ class HalfEdge {
             currHalfEdge = currHalfEdge.oppositeHalfEdge;
         } while (currHalfEdge !== null && currHalfEdge !== startHalfEdge);
     }
+    
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `e${this._index} [f${this.halfFace.index}] ` +
+                    `V${this._sourceVertex.index} `
+                    `e${this._nextHalfEdge.index} `
+                    `e${this._neighbourHalfEdge.index} `
+                    `e${this._oppositeHalfEdge.index} `
+                    `E${this._edge.index}`
+                  );
+    }
 }
 
 class Edge {
@@ -1355,5 +1480,12 @@ class Edge {
             yield neighbourHalfEdge;
             currHalfEdge = neighbourHalfEdge.oppositeHalfEdge;
         } while (currHalfEdge !== null && currHalfEdge !== startHalfEdge)
+    }
+    
+    _dump(outputLine, indent) {
+        outputLine(indent + 
+                    `E${this._index} ` +
+                    `e${this.__someGeneratingHalfEdge.index}`
+                  );
     }
 }
