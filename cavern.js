@@ -1,4 +1,4 @@
-class CavernGrid {
+export class CavernGrid {
 
     vertices() {
         return this.__vertices.values();
@@ -20,6 +20,20 @@ class CavernGrid {
         this.__halfShards[this.__halfShardIndex] = halfShard;
         halfShard._index = this.__halfShardIndex;
         this.__halfShardIndex++;
+    }
+
+    halfShards() {
+        return this.__halfShards.values();
+    }
+
+    halfShardAt(index) {
+        return this.__halfShards[index];
+    }
+
+	_reportNewShard(shard) {
+        this.__shards[this.__shardIndex] = shard;
+        shard._index = this.__shardIndex;
+        this.__shardIndex++;
     }
 
     halfShards() {
@@ -207,10 +221,6 @@ class CavernGrid {
         this.__edges = new Array(numberOfGemEdges);
         this.__edgeIndex = 0;
         
-        const widthPlusOne = width + 1;
-        const heightPlusOne = height + 1;
-        const depthPlusOne = depth + 1;
-        
         let cornerVertexIndex = 0;
         for (let z = 0; z < depthPlusOne; z++) {
             for (let y = 0; y < heightPlusOne; y++) {
@@ -239,16 +249,17 @@ class CavernGrid {
                 const dsOffset = dOffset + yyOffset;
                 for (let x = 0; x < width; x++) {
                     const xx = x + 1;
-                    const unw = cornerVertices[unOffset + x];
-                    const une = cornerVertices[unOffset + xx];
-                    const dnw = cornerVertices[dnOffset + x];
-                    const dne = cornerVertices[dnOffset + xx];
-                    const usw = cornerVertices[usOffset + x];
-                    const use = cornerVertices[usOffset + xx];
-                    const dsw = cornerVertices[dsOffset + x];
-                    const dse = cornerVertices[dsOffset + xx];
+                    const unw = vertices[unOffset + x];
+                    const une = vertices[unOffset + xx];
+                    const dnw = vertices[dnOffset + x];
+                    const dne = vertices[dnOffset + xx];
+                    const usw = vertices[usOffset + x];
+                    const use = vertices[usOffset + xx];
+                    const dsw = vertices[dsOffset + x];
+                    const dse = vertices[dsOffset + xx];
                     
                     const center = new Vertex(this, x + .5, y + .5, z + .5);
+					center._index = centerVertexIndex;
                     vertices[centerVertexIndex] = center;
                     centerVertexIndex++;
                     
@@ -267,7 +278,9 @@ class CavernGrid {
         const widthMinusOne = width - 1;
         const heightMinusOne = height - 1;
         const depthMinusOne = depth - 1;
-        
+
+		const grid = this;
+		
         for (let z = 0; z < depth; z++) {
             const uOffset = z * gemsArea;
             const dOffset = (z+1) * gemsArea;
@@ -365,6 +378,12 @@ class CavernGrid {
 		}
 		outputLine(indent + "  ],");
 
+		outputLine(indent + "  tetrahedrons: [");
+		for (const tetrahedron of this.__tetrahedrons) {
+			tetrahedron._dump(outputLine, nextIndent);
+		}
+		outputLine(indent + "  ],")
+		
         outputLine(indent + "  halfFaces: [");
 		for (const halfFace of this.__halfFaces) {
 			halfFace._dump(outputLine, nextIndent);
@@ -525,6 +544,10 @@ class Vertex {
                    `V${this._index} (${this.__x}, ${this.__y}, ${this.__z}) ` +
                    `h${this._someGeneratingOutgoingHalfEdge.index}`);
     }
+
+	toString() {
+		return `V${this._index}(${this.__x}, ${this.__y}, ${this.__z})`;
+	}
 }
 
 class Gem {
@@ -561,6 +584,40 @@ class Gem {
         return this._dHalfShard;
     }
 
+	//
+
+	_unwVertex() {
+		return this._nuHalfEdge().sourceVertex;
+	}
+
+	_uneVertex() {
+		return this._unHalfEdge().sourceVertex;
+	}
+	
+	_dneVertex() {
+		return this._ndHalfEdge().sourceVertex;
+	}
+
+	_dnwVertex() {
+		return this._dnHalfEdge().sourceVertex;
+	}
+
+	_useVertex() {
+		return this._usHalfEdge().sourceVertex;
+	}
+
+	_uswVertex() {
+		return this._suHalfEdge().sourceVertex;
+	}
+	
+	_dswVertex() {
+		return this._sdHalfEdge().sourceVertex;
+	}
+
+	_dseVertex() {
+		return this._dsHalfEdge().sourceVertex;
+	}
+	
     //
 
     _nuHalfEdge() {
@@ -707,7 +764,7 @@ class Gem {
         yield this._sdHalfEdge().neighbourHalfEdge.nextHalfEdge; // south half internal edge 4
     }
     
-    constructor(grid, unw, une, use, usw, dnw, dne, dse, dsw, center) {
+    constructor(grid, dnw, dne, dse, dsw, unw, une, use, usw, center) {
         this.__grid = grid;
         this._index = -1; // set by parent grid
         
@@ -731,29 +788,29 @@ class Gem {
         nHS_uHF._connectWithOpposite(grid, uHS_nHF);
         
         eHS_dHF._connectWithOpposite(grid, dHS_eHF);
-        eHS_nHF._connectWithOpposite(grid, nHS_eHF);
+        //eHS_nHF._connectWithOpposite(grid, nHS_eHF);
         eHS_uHF._connectWithOpposite(grid, uHS_eHF);
         eHS_sHF._connectWithOpposite(grid, sHS_eHF);
         
         sHS_wHF._connectWithOpposite(grid, wHS_sHF);
         sHS_dHF._connectWithOpposite(grid, dHS_sHF);
-        sHS_eHF._connectWithOpposite(grid, eHS_sHF);
+        //sHS_eHF._connectWithOpposite(grid, eHS_sHF);
         sHS_uHF._connectWithOpposite(grid, uHS_sHF);
        
-        wHS_nHF._connectWithOpposite(grid, nHS_wHF);
+        //wHS_nHF._connectWithOpposite(grid, nHS_wHF);
         wHS_dHF._connectWithOpposite(grid, dHS_wHF);
-        wHS_sHF._connectWithOpposite(grid, sHS_wHF);
+        //wHS_sHF._connectWithOpposite(grid, sHS_wHF);
         wHS_uHF._connectWithOpposite(grid, uHS_wHF);
         
-        uHS_wHF._connectWithOpposite(grid, wHS_uHF);
-        uHS_sHF._connectWithOpposite(grid, sHS_uHF);
-        uHS_eHF._connectWithOpposite(grid, eHS_uHF);
-        uHS_nHF._connectWithOpposite(grid, nHS_uHF);
+        //uHS_wHF._connectWithOpposite(grid, wHS_uHF);
+        //uHS_sHF._connectWithOpposite(grid, sHS_uHF);
+        //uHS_eHF._connectWithOpposite(grid, eHS_uHF);
+        //uHS_nHF._connectWithOpposite(grid, nHS_uHF);
         
-        dHS_sHF._connectWithOpposite(grid, sHS_dHF);
-        dHS_wHF._connectWithOpposite(grid, wHS_dHF);
-        dHS_nHF._connectWithOpposite(grid, nHS_dHF);
-        dHS_eHF._connectWithOpposite(grid, eHS_dHF);
+        //dHS_sHF._connectWithOpposite(grid, sHS_dHF);
+        //dHS_wHF._connectWithOpposite(grid, wHS_dHF);
+        //dHS_nHF._connectWithOpposite(grid, nHS_dHF);
+        //dHS_eHF._connectWithOpposite(grid, eHS_dHF);
 
         this._nHalfShard = nHalfShard;
         this._eHalfShard = eHalfShard;
@@ -771,8 +828,18 @@ class Gem {
                    `s${this._sHalfShard.index}, ` +
                    `s${this._wHalfShard.index}, ` +
                    `s${this._uHalfShard.index}, ` +
-                   `s${this._dHalfShard.index})` +
-                  );
+                   `s${this._dHalfShard.index}) [` +
+				   
+				   `${this._dnwVertex().toString()}, ` +
+				   `${this._dswVertex().toString()}, ` +
+				   `${this._dseVertex().toString()}, ` +
+				   `${this._dneVertex().toString()}, ` +
+				   
+				   `${this._unwVertex().toString()}, ` +
+				   `${this._uswVertex().toString()}, ` +
+				   `${this._useVertex().toString()}, ` +
+				   `${this._uneVertex().toString()}]` 
+				   );
     }
 }
 
@@ -827,7 +894,7 @@ class HalfShard {
         const tetrahedron2 = new Tetrahedron(grid, this, baseVertex3, baseVertex4, baseVertex1, topVertex);
 
         this.__tetrahedron1 = tetrahedron1;
-        this.__tetrahedron2 = tetrahedron1;
+        this.__tetrahedron2 = tetrahedron2;
         
         const baseHalfFace1 = tetrahedron1.baseHalfFace;
         const baseHalfEdge1 = baseHalfFace1.firstHalfEdge;
@@ -870,7 +937,7 @@ class HalfShard {
     
     *_sideHalfFaces() {
         for (const baseHalfEdge of this._baseHalfEdges()) {
-            yield baseHalfEdge.halfFace;
+            yield baseHalfEdge.neighbourHalfEdge.halfFace;
         }
     }
 
@@ -924,7 +991,7 @@ class HalfShard {
         }
         
         const shard = new Shard(grid, this);
-        this.shard = shard;        
+        this._shard = shard;        
     }
 
     _flip() {
@@ -1079,13 +1146,17 @@ class HalfShard {
 
     _dump(outputLine, indent) {
         outputLine(indent + 
-                    `s${this._index} [G${this.gem}] (` +
+                    `s${this._index} [G${this.__gem === null ? "\u2400" : this.__gem.index}] (` +
                     `e${this.__baseHalfEdge1.index}, ` +
                     `e${this.__baseHalfEdge2.index}, ` +
                     `e${this.__baseHalfEdge3.index}, ` +
                     `e${this.__baseHalfEdge4.index}) (` +
                     `T${this.__tetrahedron1.index}, ` +
-                    `T${this.__tetrahedron2.index})`
+                    `T${this.__tetrahedron2.index}) [` +
+					`${this.__baseHalfEdge1.sourceVertex.toString()}, ` +
+					`${this.__baseHalfEdge2.sourceVertex.toString()}, ` +
+					`${this.__baseHalfEdge3.sourceVertex.toString()}, ` +
+					`${this.__baseHalfEdge4.sourceVertex.toString()}]`				   
                   );
     }
 }
@@ -1132,7 +1203,11 @@ class Shard {
         outputLine(indent + 
                     `S${this._index} ` +
                     `s${this.__someHalfShard.index} ` +
-                   `${this.__flipped ? "flipped" : ""}`
+                   `${this.__flipped ? "fl=1" : "fl=0"} [` +
+					`${this.__someHalfShard.__baseHalfEdge1.sourceVertex.toString()}, ` +
+					`${this.__someHalfShard.__baseHalfEdge2.sourceVertex.toString()}, ` +
+					`${this.__someHalfShard.__baseHalfEdge3.sourceVertex.toString()}, ` +
+					`${this.__someHalfShard.__baseHalfEdge4.sourceVertex.toString()}]`
                   );
     }
 }
@@ -1160,10 +1235,10 @@ class Tetrahedron {
         const sideHalfFace2 = new HalfFace(grid, this, baseVertex3, baseVertex2, topVertex);
         const sideHalfFace3 = new HalfFace(grid, this, baseVertex1, baseVertex3, topVertex);
         
-        const [bhe1, bhe2, bhe3] = baseHalfFace._halfEdges();
-        const [s1he1, s1he2, s1he3] = sideHalfFace1._halfEdges();
-        const [s2he1, s2he2, s2he3] = sideHalfFace2._halfEdges();
-        const [s3he1, s3he2, s3he3] = sideHalfFace3._halfEdges();
+        const [bhe1, bhe2, bhe3] = baseHalfFace.halfEdges();
+        const [s1he1, s1he2, s1he3] = sideHalfFace1.halfEdges();
+        const [s2he1, s2he2, s2he3] = sideHalfFace2.halfEdges();
+        const [s3he1, s3he2, s3he3] = sideHalfFace3.halfEdges();
         
         bhe1._connectWithNeighbour(s1he1);
         bhe2._connectWithNeighbour(s2he1);
@@ -1189,12 +1264,14 @@ class Tetrahedron {
     }
     
     _dump(outputLine, indent) {
+		const bhf = this.__baseHalfFace;
+		const [he1, he2, he3] = bhf.halfEdges();
         outputLine(indent + 
                     `T${this._index} [s${this.halfShard.index}] ` +
-                    `f${this.__baseHalfFace.index}`
+                    `f${this.__baseHalfFace.index} [` +
+				    `${he1.sourceVertex.toString()}, ${he2.sourceVertex.toString()}, ${he3.sourceVertex.toString()}, ${he1.neighbourHalfEdge.nextHalfEdge.nextHalfEdge.sourceVertex.toString()}]`
                   );
     }
-    
 }
 
 class HalfFace {
@@ -1202,7 +1279,11 @@ class HalfFace {
     get tetrahedron() {
         return this.__tetrahedron;
     }
-    
+
+	get face() {
+		return this._face;
+	}
+	
     get index() {
         return this._index;
     }
@@ -1216,10 +1297,10 @@ class HalfFace {
         this._index = -1;
         const halfEdge1 = new HalfEdge(grid, this, vertex1);
         const halfEdge2 = new HalfEdge(grid, this, vertex2);
-        const halfEdge2 = new HalfEdge(grid, this, vertex3);
-        halfEdge1.nextHalfEdge = halfEdge2;
-        halfEdge2.nextHalfEdge = halfEdge3;
-        halfEdge3.nextHalfEdge = halfEdge1;
+        const halfEdge3 = new HalfEdge(grid, this, vertex3);
+        halfEdge1._nextHalfEdge = halfEdge2;
+        halfEdge2._nextHalfEdge = halfEdge3;
+        halfEdge3._nextHalfEdge = halfEdge1;
         this._firstHalfEdge = halfEdge1;
         this._face = null;
         grid._reportNewHalfFace(this);
@@ -1291,23 +1372,30 @@ class HalfFace {
             ._connectWithOpposite(oppositeHalfFace
                                   ._halfEdgeForVertices(myVertex1, myVertex3));
         const face = new Face(grid, this);
-        if (this.face !== null) {
+        if (this._face !== null) {
             throw new Error(`invariant violation: face set twice`);
         }
-        this.face = face;
-        if (oppositeHalfFace.face !== null) {
+        this._face = face;
+        if (oppositeHalfFace._face !== null) {
             throw new Error(`invariant violation: face set twice`);
         }
-        oppositeHalfFace.face = face;
+        oppositeHalfFace._face = face;
     }
 
     _dump(outputLine, indent) {
+		const [he1, he2, he3] = this.halfEdges();
         outputLine(indent + 
                     `f${this._index} [T${this.tetrahedron.index}] ` +
                     `e${this._firstHalfEdge.index} ` +
-                    `F${this._face.index}`
+                    `F${this._face === null ? "\u2400" : this._face.index} [` +
+				   `${he1.sourceVertex}, ${he2.sourceVertex}, ${he3.sourceVertex})]`
                   );
     }
+
+	toString() {
+		const [he1, he2, he3] = this.halfEdges();
+		return `h${this._index}(${he1.toStringShort()}, ${he2.toStringShort()}, ${he3.toStringShort()})`;
+	}
 }
 
 class Face {
@@ -1329,8 +1417,7 @@ class Face {
     
     _dump(outputLine, indent) {
         outputLine(indent + 
-                    `F${this._index} [T${this.tetrahedron.index}] ` +
-                    `f${this.__someHalfFace.index}`
+                    `F${this._index} f${this.__someHalfFace === null ? "\u2400" : this.__someHalfFace.index}`
                   );
     }
 }
@@ -1370,7 +1457,7 @@ class HalfEdge {
         this._index = -1;
         this._sourceVertex = sourceVertex; // must be package-public because of flipping
         this._nextHalfEdge = null;
-        this._neighbourHalfEdge = null;
+        this._neighbourHalfEdge = null; 
         this._oppositeHalfEdge = null;
         this._edge = null;
         grid._reportNewHalfEdge(this);
@@ -1391,13 +1478,13 @@ class HalfEdge {
     }
 
     _connectWithNeighbour(neighbourHalfEdge) {
-        this.neighbourHalfEdge = neighbourHalfEdge;
-        neighbourHalfEdge.neighbourHalfEdge = this;
+        this._neighbourHalfEdge = neighbourHalfEdge;
+        neighbourHalfEdge._neighbourHalfEdge = this;
     }
     
     _connectWithOpposite(oppositeHalfEdge) {
-        this.oppositeHalfEdge = oppositeHalfEdge;
-        oppositeHalfEdge.oppositeHalfEdge = this;
+        this._oppositeHalfEdge = oppositeHalfEdge;
+        oppositeHalfEdge._oppositeHalfEdge = this;
     }
 
     _connectWithSiblingsAndVertices(grid) {
@@ -1423,7 +1510,7 @@ class HalfEdge {
             endHalfEdge = oppositeHalfEdge.neighbourHalfEdge;
         } while (endHalfEdge !== this.neighbourHalfEdge);
 
-        const vertex = startHalfEdge.sourceVertex;
+        const vertex1 = startHalfEdge.sourceVertex;
         if (vertex1._someGeneratingOutgoingHalfEdge === null) {
             vertex1._someGeneratingOutgoingHalfEdge = startHalfEdge;
         }
@@ -1436,23 +1523,33 @@ class HalfEdge {
         const edge = new Edge(grid, startHalfEdge);
         let currHalfEdge = startHalfEdge;
         do {
-            currHalfEdge.edge = edge;
+            currHalfEdge._edge = edge;
             currHalfEdge = currHalfEdge.neighbourHalfEdge;
-            currHalfEdge.edge = edge;
+            currHalfEdge._edge = edge;
             currHalfEdge = currHalfEdge.oppositeHalfEdge;
         } while (currHalfEdge !== null && currHalfEdge !== startHalfEdge);
     }
     
     _dump(outputLine, indent) {
         outputLine(indent + 
-                    `e${this._index} [f${this.halfFace.index}] ` +
-                    `V${this._sourceVertex.index} `
-                    `e${this._nextHalfEdge.index} `
-                    `e${this._neighbourHalfEdge.index} `
-                    `e${this._oppositeHalfEdge.index} `
-                    `E${this._edge.index}`
+                    `e${this._index} [f${this._halfFace === null ? "\u2400" : this._halfFace.index}] ` +
+                    `V${this._sourceVertex === null ? "\u2400" : this._sourceVertex.index} ` +
+                    `e${this._nextHalfEdge === null ? "\u2400" : this._nextHalfEdge.index} ` +
+                    `e${this._neighbourHalfEdge === null ? "\u2400" : this._neighbourHalfEdge.index} ` +
+                    `e${this._oppositeHalfEdge === null ? "\u2400" : this._oppositeHalfEdge.index} ` +
+                    `E${this._edge === null ? "\u2400" : this._edge.index} [` +
+				   `${this._sourceVertex.toString()}, ` +
+				   `${this._nextHalfEdge._sourceVertex.toString()}]`
                   );
     }
+
+	toString() {
+		return `e${this._index}[${this.sourceVertex} -> ${this.targetVertex()}]`;
+	}
+
+	toStringShort() {
+		return `e${this._index}[${this.sourceVertex}]`;
+	}
 }
 
 class Edge {
