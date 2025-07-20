@@ -44,7 +44,7 @@ import {
 } from "./linalg.js";
     
 export function test(report) {
-    /*report.startSection("addV", "Vector Addition", "4e8a6e7f8be361e6ed79623fe0389995ecc0a0f70a61657a70239f98c7d8618a");
+    report.startSection("addV", "Vector Addition", "4e8a6e7f8be361e6ed79623fe0389995ecc0a0f70a61657a70239f98c7d8618a");
     testAdd(report);
     report.endSection("addV");
 
@@ -56,19 +56,19 @@ export function test(report) {
     testScale(report);
     report.endSection("scaleV");
 
-    report.startSection("multMV", "Matrix Vector Multiplication", "45725791c47b32618cc57b88343e2bceec3b0a01b83bc97d144a2cbc11a20c3d");
+    report.startSection("multMV", "Matrix Vector Multiplication", "02008bcaed1c817040399865117142c103baf8cbb265287a2a44e3a4878c1eb9");
     testMultMV(report);
     report.endSection("multMV");
 
-    report.startSection("affine", "Affine Transformations", "67f022195ee405142968ca1b53ae2513a8bab0404d70577785316fa95218e8ba");
+    report.startSection("affine", "Affine Transformations", "3cfabd2152b409a48975303708defc52f925cb7372e60bc580b3e9820118b39a");
     testAffine(report);
-    report.endSection("affine");*/
+    report.endSection("affine");
 
-    report.startSection("det", "Matrix Determinants", "45725791c47b32618cc57b88343e2bceec3b0a01b83bc97d144a2cbc11a20c3d");
+    report.startSection("det", "Matrix Determinants", "ba1f27eaabebc50f957dc4c0be37b3363dbd71f89f54d38e0be040b62fef179f");
     testDetM(report);
     report.endSection("det");
 
-    report.startSection("inv", "Matrix Inverses", "");
+    report.startSection("inv", "Matrix Inverses", "86ece71323aabb19fc7ecfa11bda30763ccdc61b0cdc5e5934ff975ce7224b9e");
     testInvM(report);
     report.endSection("inv");
     
@@ -346,7 +346,7 @@ export function testDetM(report) {
     testDetIdentityM(report);
     report.endSection("identity");
 
-    report.startSection("arbitrary", "Arbitrary Matrices", "41175e385316430b8ce54142211786189ee46ae943a907f5dcb6e9ecdf723ba5");
+    report.startSection("arbitrary", "Arbitrary Matrices", "d75978d75272f28fb7b343a35330f36f0eb50412e0a16553be28f4cbcfdc9358");
     testDetArbitraryM(report);
     report.endSection("arbitrary");
 
@@ -427,7 +427,7 @@ export function testInvM(report) {
     testInvIdentityM(report);
     report.endSection("identity");
 
-    report.startSection("arbitrary", "Arbitrary Matrices", "");
+    report.startSection("arbitrary", "Arbitrary Matrices", "0fbcf605cb5391f3264e3a01072a7dd2d7c7a8b956d8953b1f11df9bc90a40da");
     testInvArbitraryM(report);
     report.endSection("arbitrary");
 

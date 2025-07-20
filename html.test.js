@@ -112,6 +112,7 @@ export class SubSectionTestParagraph extends TestParagraph {
         super(parentSection, idx);
         this.subSection = subSection;
         subSection.addFinishHandler(() => {
+            this.hashHex = subSection.hashHex;
             this.reportFinished();
         });
         subSection.addFailHandler(() => {
