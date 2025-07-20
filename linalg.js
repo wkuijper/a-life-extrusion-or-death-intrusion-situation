@@ -1,3 +1,35 @@
+export function strV1([a]) {
+       return `[${a}]`;
+}
+
+export function strV2([a1, a2]) {
+       return `[${a1}, ${a2}]`;
+}
+
+export function strV3([a1, a2, a3]) {
+       return `[${a1}, ${a2}, ${a3}]`;
+}
+
+export function strV4([a1, a2, a3, a4]) {
+       return `[${a1}, ${a2}, ${a3}, ${a4}]`;
+}
+
+export function strM1([a]) {
+       return `[${a}]`;
+}
+
+export function strM2([a11, a12, a21, a22]) {
+       return `[${a11}, ${a12}, ${a21}, ${a22}]`;
+}
+
+export function strM3([a11, a12, a13, a21, a22, a23, a31, a32, a33]) {
+       return `[${a11}, ${a12}, ${a13}, ${a21}, ${a22}, ${a23}, ${a31}, ${a32}, ${a33}]`;
+}
+
+export function strM4([a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a34, a41, a42, a43, a44]) {
+       return `[${a11}, ${a12}, ${a13}, ${a14}, ${a21}, ${a22}, ${a23}, ${a24}, ${a31}, ${a32}, ${a33}, ${a34}, ${a41}, ${a42}, ${a43}, ${a44}]`;
+}
+
 export function addV1([a], [b]) {
        return [a + b];
 }
@@ -46,6 +78,34 @@ export function scaleV4(s, [a1, a2, a3, a4]) {
        return [s * a1, s * a2, s * a3, s * a4];
 }
 
+export function identityM1() {
+       return [1];
+}
+
+export function identityM2() {
+       return [
+              1, 0,
+              0, 1,
+       ];
+}
+
+export function identityM3() {
+       return [
+              1, 0, 0,
+              0, 1, 0,
+              0, 0, 1,
+       ];
+}
+
+export function identityM4() {
+       return [
+              1, 0, 0, 0,
+              0, 1, 0, 0,
+              0, 0, 1, 0,
+              0, 0, 0, 1,
+       ];
+}
+
 export function multM1V1([a], [b]) {
        return [
               a * b,
@@ -67,7 +127,7 @@ export function multM3V3([a11, a12, a13, a21, a22, a23, a31, a32, a33], [b1, b2,
        ];
 }
 
-export function multM4V4([a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a34, a41, a42, a43, a44], [b1, b2, b3, b4] {
+export function multM4V4([a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a34, a41, a42, a43, a44], [b1, b2, b3, b4]) {
        return [
               a11 * b1 + a12 * b2 + a13 * b3 + a14 * b4,
               a21 * b1 + a22 * b2 + a23 * b3 + a24 * b4,
@@ -90,7 +150,7 @@ export function multM2([a11, a12, a21, a22], [b11, b12, b21, b22]) {
       ];
 }
 
-export function multM3([a11, a12, a13, a21, a22, a23, a31, a32, a33], [a11, a12, a13, a21, a22, a23, a31, a32, a33]) {
+export function multM3([a11, a12, a13, a21, a22, a23, a31, a32, a33], [b11, b12, b13, b21, b22, b23, b31, b32, b33]) {
        return [
               a11 * b11 + a12 * b21 + a13 * b31,
               a11 * b12 + a12 * b22 + a13 * b32,
@@ -125,49 +185,10 @@ export function multM4([a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a
               a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44,
               
               a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41,
-              a41 * b12 + a42_x_b22 + a43 * b32 + a44 * b42,
+              a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42,
               a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43,
               a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44
        ];
-}
-
-export function detM1([a]) {
-       return a;
-}
-
-export function detM2([a11, a12, a21, a22]) {
-       return a11 * a22 - a21 * a12;
-}
-
-export function detM3([a11, a12, a13, a21, a22, a23, a31, a32, a33]) {
-       let det = 0;
-       if (a31 !== 0) {
-              det += a31 * detM2([a11, a13, a21, a23]);
-       }
-       if (a32 !== 0) {
-              det -= a32 * detM2([a11, a13, a21, a23]);
-       }
-       if (a33 !== 0) {
-              det += a33 * detM2([a11, a12, a21, a22]);
-       }
-       return det;
-}
-
-export function detM4([a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a34, a41, a42, a43, a44]) {
-       let det = 0;
-       if (a41 !== 0) {
-              det -= a41 * detM3([a12, a13, a14, a22, a23, a24, a32, a33, a34]);
-       }
-       if (a42 !== 0) {
-              det += a42 * detM3([a11, a13, a14, a21, a23, a24, a31, a33, a34]);
-       }
-       if (a43 !== 0) {
-              det -= a43 * detM3([a11, a12, a14, a21, a22, a24, a31, a32, a34]);
-       }
-       if (a44 !== 0) {
-              det += a44 * detM3([a11, a12, a13, a21, a22, a23, a31, a32, a33]);
-       }
-       return det;
 }
 
 export function composeAffineM1V1([a], [b]) {
@@ -194,7 +215,7 @@ export function composeAffineM2V2([a11, a12, a21, a22], [b1, b2]) {
 }
 
 export function decomposeAffineM3([a11, a12, b1, a21, a22, b2, _zero1, _zero2, _one]) {
-       return [[a11, a12, a13, a21, a22], 
+       return [[a11, a12, a21, a22], 
                               [b1, b2]];
 }
 
@@ -208,7 +229,7 @@ export function deaugmentV3([a1, a2, _one]) {
 
 
 export function composeAffineM3V3([a11, a12, a13, a21, a22, a23, a31, a32, a33], [b1, b2, b3]) {
-       return [a11, a12 a13, b1,
+       return [a11, a12, a13, b1,
                a21, a22, a23, b2,
                a31, a32, a33, b3,
                0, 0, 0, 1];
@@ -225,6 +246,45 @@ export function augmentV3([a1, a2, a3]) {
 
 export function deaugmentV4([a1, a2, a3, _one]) {
        return [a1, a2, a3];
+}
+
+export function detM1([a]) {
+       return a;
+}
+
+export function detM2([a11, a12, a21, a22]) {
+       return a11 * a22 - a21 * a12;
+}
+
+export function detM3([a11, a12, a13, a21, a22, a23, a31, a32, a33]) {
+       let det = 0;
+       if (a31 !== 0) {
+              det += a31 * detM2([a12, a13, a22, a23]);
+       }
+       if (a32 !== 0) {
+              det -= a32 * detM2([a11, a13, a21, a23]);
+       }
+       if (a33 !== 0) {
+              det += a33 * detM2([a11, a12, a21, a22]);
+       }
+       return det;
+}
+
+export function detM4([a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a34, a41, a42, a43, a44]) {
+       let det = 0;
+       if (a41 !== 0) {
+              det -= a41 * detM3([a12, a13, a14, a22, a23, a24, a32, a33, a34]);
+       }
+       if (a42 !== 0) {
+              det += a42 * detM3([a11, a13, a14, a21, a23, a24, a31, a33, a34]);
+       }
+       if (a43 !== 0) {
+              det -= a43 * detM3([a11, a12, a14, a21, a22, a24, a31, a32, a34]);
+       }
+       if (a44 !== 0) {
+              det += a44 * detM3([a11, a12, a13, a21, a22, a23, a31, a32, a33]);
+       }
+       return det;
 }
 
 export function invertM1(m) {
