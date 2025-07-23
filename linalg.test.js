@@ -1,10 +1,10 @@
 import * as THREE from "./three.module.js";
 
 import { 
-    scaleV1, subtractV1, addV1, strV1,
-    scaleV2, subtractV2, addV2, strV2,
-    scaleV3, subtractV3, addV3, strV3,
-    scaleV4, subtractV4, addV4, strV4, 
+    negV1, scaleV1, subtractV1, addV1, strV1,
+    negV2, scaleV2, subtractV2, addV2, strV2,
+    negV3, scaleV3, subtractV3, addV3, strV3,
+    negV4, scaleV4, subtractV4, addV4, strV4, 
 
     identityM1, multM1V1, strM1,
     identityM2, multM2V2, strM2,
@@ -60,6 +60,10 @@ export function test(report) {
     report.startSection("scaleV", "Vector Scaling", "1ed025b3501b4f52ed6fbd4fe547a137e7eca1c2cce1ca372a454f32dd3bcb7a");
     testScale(report);
     report.endSection("scaleV");
+
+    report.startSection("negV", "Vector Negation", "6dd963dc9ae0473c464dd637475aac69a6ca89d297e4a142b95f894637675c63");
+    testNeg(report);
+    report.endSection("negV");
 
     report.startSection("multMV", "Matrix Vector Multiplication", "02008bcaed1c817040399865117142c103baf8cbb265287a2a44e3a4878c1eb9");
     testMultMV(report);
@@ -177,6 +181,31 @@ export function testScale(report) {
     const h = scaleV4(v, g);
 
     outputLine(`${v} * ${strV4(g)} = ${strV4(h)}`); 
+}
+
+export function testNeg(report) {
+    const outputLine = report.outputLine;
+    const prefix = "";
+
+    const a = [1];
+    const b = negV1(a);
+
+    outputLine(`-${strV1(a)} = ${strV1(b)}`);
+    
+    const c = [1, -5];
+    const d = negV2(c);
+
+    outputLine(`-${strV2(c)} = ${strV2(d)}`);
+    
+    const e = [1, -5, 2];
+    const f = negV3(e);
+
+    outputLine(`-${strV3(e)} = ${strV3(f)}`);
+    
+    const g = [1, -5, 2, -2];
+    const h = negV4(g);
+
+    outputLine(`-${strV4(g)} = ${strV4(h)}`); 
 }
 
 export function testMultMV(report) {

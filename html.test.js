@@ -33,7 +33,7 @@ export class TestParagraph {
     }
 }
 
-export class LinesTestParagraph extends TestParagraph {
+export class LinesParagraph extends TestParagraph {
 
     constructor(parentSection, idx) {
         super(parentSection, idx);
@@ -73,7 +73,7 @@ export class LinesTestParagraph extends TestParagraph {
     }
 }
 
-export class ImageTestParagraph extends TestParagraph {
+export class ImageParagraph extends TestParagraph {
     
     constructor(parentSection, idx, url, noHash) {
         super(parentSection, idx);
@@ -106,7 +106,112 @@ export class ImageTestParagraph extends TestParagraph {
     }
 }
 
-export class SubSectionTestParagraph extends TestParagraph {
+export class ImagesParagraph extends TestParagraph {
+    
+    constructor(parentSection, idx, images, noHash) {
+        super(parentSection, idx);
+
+        this.noHash = noHash;
+
+        const headerElement = document.createElement("div");
+        this.headerElement = headerElement;
+
+        const counterSpan = document.createElement("span");
+        this.counterSpan = counterSpan;
+    
+        this.headerElement.appendChild(counterSpan);
+        
+        const expandLink = document.createElement("a");
+        expandLink.innerText = "expand";
+        expandLink.style.marginLeft = "10px";
+        this.expandLink = expandLink;
+
+        this.headerElement.appendChild(expandLink);
+        
+        const mainElement = document.createElement("div");
+        this.mainElement = mainElement;
+        
+        const numberOfImages = images.length;
+        this.numberOfImages = numberOfImages;
+        
+        this.imgContainerElements = new Array(numberOfImages);
+        this.imgHashHexes = new Array(numberOfImages);
+        this.numberOfImagesLoaded = 0;
+        this.numberOfImagesHashed = 0;
+
+        this.currDisplayingImgIndex = -1;
+        
+        for (let i = 0; i < numberOfImages; i++) {
+            const { url, caption } = images[i];
+
+            const containerElement = document.createElement("div");
+                
+            const imgElement = document.createElement("img");
+            containerElement.appendChild(imgElement);
+
+            if (caption !== undefined) {
+                const captionElement = document.createElement("pre");
+                captionElement.innerText = caption;
+                containerElement.appendChild(captionElement);
+            }
+            
+            this.imgContainerElements[i] = containerElement;
+            this.imgHashHexes[i] = "";
+            
+            if (!this.noHash) {
+                fetch(url).then(r => r.blob().arrayBuffer().then((arrayBuffer) => {
+                    const hasher = sha256();
+                    const uint8View = new Uint8Array(arrayBuffer);
+                    hasher.add(uint8View);
+                    this.imgHashHexes[i] = hasher.digest().hex();
+                    this.numberOfImagesHashed++;
+                    this.reportIfFinished();            
+                }));
+            }
+            
+            imgElement.onload = () => {
+                if (i === 0) {
+                    this.mainElement.appendChild(containerElement);
+                    this.counterSpan.innerText = `1/${this.numberOfImages}`;
+                    this.currDisplayingImgIndex = 0;
+                }
+                this.numberOfImagesLoaded++;
+                this.reportIfFinished();
+            }
+            
+            imgElement.src = url;
+        }
+
+        //this.contentElement.appendChild(this.headerElement);
+        this.contentElement.appendChild(this.mainElement);
+        
+        mainElement.onclick = (evt) => {
+           if (this.currDisplayingImgIndex >= 0 && this.finished) {
+               const currImgIndex = this.currDisplayingImgIndex;
+               const nextImgIndex = (currImgIndex + 1) % this.numberOfImages;
+               const currImgContainerElement = this.imgContainerElements[currImgIndex];
+               const nextImgContainerElement = this.imgContainerElements[nextImgIndex];
+               currImgContainerElement.replaceWith(nextImgContainerElement);
+               this.currDisplayingImgIndex = nextImgIndex;
+                this.counterSpan.innerText = `${nextImgIndex+1}/${this.numberOfImages}`;
+           } 
+        }
+    }
+
+    reportIfFinished() {
+        if (this.numberOfImagesLoaded === this.numberOfImages 
+            && (this.noHash || this.numberOfImagesHashed === this.numberOfImages)) {
+            const hasher = sha256();
+            for (const hashHex of this.imgHashHexes) {
+                hasher.add(hashHex);
+            }
+            this.hashHex = hasher.digest().hex();
+            this.reportFinished();
+        }
+    }
+}
+
+export class SubSectionParagraph extends TestParagraph {
     
     constructor(parentSection, idx, subSection) {
         super(parentSection, idx);
@@ -197,13 +302,18 @@ export class TestSection {
     
     addImage(url, noHash) {
         const imageParagraph = this._addParagraph(
-            new ImageTestParagraph(this, this.paragraphEntries.length, url, noHash));
+            new ImageParagraph(this, this.paragraphEntries.length, url, noHash));
+    }
+
+    addImages(urls, noHash) {
+        const imageParagraph = this._addParagraph(
+            new ImagesParagraph(this, this.paragraphEntries.length, urls, noHash));
     }
 
     addLine(str, noHash) {
         if (this.currLineParagraph === null) {
              const lineParagraph = this._addParagraph(
-                 new LinesTestParagraph(this, this.paragraphEntries.length));
+                 new LinesParagraph(this, this.paragraphEntries.length));
             this.currLineParagraph = lineParagraph;
         }
         this.currLineParagraph.addLine(str, noHash);
@@ -220,7 +330,7 @@ export class TestSection {
             this.currLineParagraph = null;
         }
         const subSectionParagraph = this._addParagraph(
-            new SubSectionTestParagraph(this, this.paragraphEntries.length, subSection));
+            new SubSectionParagraph(this, this.paragraphEntries.length, subSection));
         return subSection;
     }
     
@@ -417,6 +527,13 @@ export class TestReport {
             hash = false;
         }
         this.currSection.addImage(url, !hash);
+    }
+    
+    logImages(urls, hash) {
+        if (hash === undefined) {
+            hash = false;
+        }
+        this.currSection.addImages(urls, !hash);
     }
 
     createCanvas(width, height) {

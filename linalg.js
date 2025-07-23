@@ -78,6 +78,22 @@ export function scaleV4(s, [a1, a2, a3, a4]) {
        return [s * a1, s * a2, s * a3, s * a4];
 }
 
+export function negV1([a]) {
+       return [-a];
+}
+
+export function negV2([a1, a2]) {
+       return [-a1, -a2];
+}
+
+export function negV3([a1, a2, a3]) {
+       return [-a1, -a2, -a3];
+}
+
+export function negV4([a1, a2, a3, a4]) {
+       return [-a1, -a2, -a3, -a4];
+}
+
 export function identityM1() {
        return [1];
 }
