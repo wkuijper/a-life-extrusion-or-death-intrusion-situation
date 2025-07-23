@@ -41,6 +41,11 @@ import {
     multM2,
     multM3,
     multM4,
+    
+    dotV1, normSqV1, normV1,
+    dotV2, normSqV2, normV2,
+    dotV3, crossV3, normSqV3, normV3,
+    dotV4, normSqV4, normV4,
 } from "./linalg.js";
     
 export function test(report) {
@@ -71,8 +76,20 @@ export function test(report) {
     report.startSection("inv", "Matrix Inverses", "86ece71323aabb19fc7ecfa11bda30763ccdc61b0cdc5e5934ff975ce7224b9e");
     testInvM(report);
     report.endSection("inv");
+
+    report.startSection("dot", "Vector Dot-products", "e590005f382c0216167d0ade6764f03a2415ddb625b391b160cf3ac3c78b6e30");
+    testDotV(report);
+    report.endSection("dot");
     
-	report.expandPath("/inv/arbitrary");
+    report.startSection("cross", "Vector Cross-products", "d770761b4298a76f3a649bcc52e99f73980b053a6057e9fb052d0770f34a0464");
+    testCrossV3(report);
+    report.endSection("cross");
+
+    report.startSection("norm", "Vector normalization", "dfbc5479e20f1912726dd7a1b4569c87a6dda9bed1d1994b65d072e33e691593");
+    testNormV3(report);
+    report.endSection("norm");
+    
+	report.expandPath("/cross");
 }
 
 export function testAdd(report) {
@@ -297,7 +314,6 @@ export function testAffineDeaugment(report) {
     
 }
 
-
 export function testAffineCompose(report) {
     
     const outputLine = report.outputLine;
@@ -517,4 +533,73 @@ export function testInvArbitraryM(report) {
 
     const pXpp = multM4(p, pp);
     outputLine(`o * inv(o) = ${strM4(pXpp)}`);
+}
+    
+export function testDotV(report) {
+    const outputLine = report.outputLine;
+    const prefix = "";
+
+    const a = [-2];
+    const b = [-3];
+    const s = dotV1(a, b);
+
+    outputLine(`${strV1(a)} . ${strV1(b)} = ${s}`);
+
+    const c = [2, -3];
+    const d = [-1.5, 8];
+    const t = dotV2(c, d);
+
+    outputLine(`${strV2(c)} . ${strV2(d)} = ${t}`);
+    
+    const e = [9, 17, -3];
+    const f = [8, -1.5, 1];
+    const u = dotV3(e, f);
+
+    outputLine(`${strV3(e)} . ${strV3(f)} = ${u}`);
+
+    const g = [3, -3, 3, 2];
+    const h = [0, -2.5, 2.33, 1];
+    const v = dotV4(g, h);
+
+    outputLine(`${strV4(g)} . ${strV4(h)} = ${v}`);
+}
+
+export function testCrossV3(report) {
+    const outputLine = report.outputLine;
+    const prefix = "";
+    
+    const e = [9, 17, -3];
+    const f = [8, -1.5, 1];
+    const u = crossV3(e, f);
+
+    outputLine(`${strV3(e)} x ${strV3(f)} = ${strV3(u)}`);
+}
+    
+export function testNormV3(report) {
+    const outputLine = report.outputLine;
+    const prefix = "";
+
+    const a = [-2];
+    const sSq = normSqV1(a);
+    const s = normV1(a);
+
+    outputLine(`|${strV1(a)}| = ${s} = sqrt(${sSq})`);
+
+    const b = [4, -3];
+    const tSq = normSqV2(b);
+    const t = normV2(b);
+
+    outputLine(`|${strV2(b)}| = ${t} = sqrt(${tSq})`);
+    
+    const c = [9, 17, -3];
+    const uSq = normSqV3(c);
+    const u = normV3(c);
+
+    outputLine(`|${strV3(c)}| = ${u} = sqrt(${uSq})`);
+
+    const d = [3, -3, 3, 2];
+    const vSq = normSqV4(d);
+    const v = normV4(d);
+
+    outputLine(`|${strV4(d)}| = ${v} = sqrt(${vSq})`);
 }

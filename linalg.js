@@ -458,3 +458,92 @@ export function invertM4(m) {
        
        return invM;
 }
+
+export function dotV1([a], [b]) {
+       return a * b;
+}
+
+export function dotV2([a1, a2], [b1, b2]) {
+       return a1 * b1 + a2 * b2;
+}
+
+export function dotV3([a1, a2, a3], [b1, b2, b3]) {
+       return a1 * b1 + a2 * b2 + a3 * b3;
+}
+
+export function dotV4([a1, a2, a3, a4], [b1, b2, b3, b4]) {
+       return a1 * b1 + a2 * b2 + a3 * b3 + a4 * b4;
+}
+
+export function normSqV1([a]) {
+       return a * a;
+}
+
+export function normSqV2([a1, a2]) {
+       return a1 * a1 + a2 * a2;
+}
+
+export function normSqV3([a1, a2, a3]) {
+       return a1 * a1 + a2 * a2 + a3 * a3;
+}
+
+export function normSqV4([a1, a2, a3, a4]) {
+       return a1 * a1 + a2 * a2 + a3 * a3 + a4 * a4;
+}
+
+export function normV1([a]) {
+       return Math.abs(a);
+}
+
+export function normV2(v) {
+       return Math.sqrt(normSqV2(v));
+}
+
+export function normV3(v) {
+       return Math.sqrt(normSqV3(v));
+}
+
+export function normV4(v) {
+       return Math.sqrt(normSqV4(v));
+}
+
+export function normalizeV1([a]) {
+       if (a === 0) {
+              return null;
+       }
+       if (a < 0) {
+              return [-1];
+       }
+       return [1];
+}
+
+export function normalizeV2(v) {
+       const norm = normV2(v);
+       if (norm === 0) {
+              return null;
+       }
+       const overNorm = 1 / norm;
+       return scaleV2(overNorm, v);
+}
+
+export function normalizeV3(v) {
+       const norm = normV3(v);
+       if (norm === 0) {
+              return null;
+       }
+       const overNorm = 1 / norm;
+       return scaleV3(overNorm, v);
+}
+
+export function normalizeV4(v) {
+       const norm = normV4(v);
+       if (norm === 0) {
+              return null;
+       }
+       const overNorm = 1 / norm;
+       return scaleV4(overNorm, v);
+}
+
+export function crossV3([a1, a2, a3], [b1, b2, b3]) {
+       return [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1];
+}
