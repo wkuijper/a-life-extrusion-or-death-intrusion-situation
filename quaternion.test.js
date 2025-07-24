@@ -1,4 +1,9 @@
 import {
+	strM3,
+	scaleV3, normalizeV3, multM3, multM3V3,
+} from "./linalg.js";
+
+import {
 	strQ, addQ, multQ, reciprocalQ, conjQ, 
 	pureQuaternionForVector, 
 	rotationQuaternionAboutAxis, 
@@ -30,7 +35,7 @@ export function test(report) {
     testRotations(report);
     report.endSection("rotations");
     
-	report.expandPath("/add");
+	report.expandPath("/rotations");
 }
 
 export function testAdd(report) {
@@ -85,12 +90,62 @@ export function testConj(report) {
 }
 
 export function testRotations(report) {
+
+	// set up vectors etc.
+
+	const axisVector = [1, 1, 1];
+	const normalizedAxisVector = normalizeV3(axisVector);
+	const axisArrowLength = 3;
+	const axisArrowStartPos = scaleV3(-(axisArrowLength/4), axisVector);
+
+	// set up scene
 	
 	const scene = new THREE.Scene();
+
+	const markers = [
+		{ pos: [.5, .5, .5], colorCode: 0xff0000, /* red */ },
+		{ pos: [.5, .5, -.5], colorCode: 0x00ff00, /* green */ },
+		{ pos: [.5, -.5, .5], colorCode: 0x0000ff, /* blue */ },
+		{ pos: [.5, -.5, -.5], colorCode: 0xFFFF00, /* ... */ },
+		{ pos: [-.5, .5, .5], colorCode: 0x0FF00FF, /* ... */ },
+		{ pos: [-.5, .5, -.5], colorCode: 0x00FFFF, /* ... */ },
+		{ pos: [-.5, -.5, .5], colorCode: 0xFFFFFF, /* ... */ },
+		{ pos: [-.5, -.5, -.5], colorCode: 0x555555, /* ... */ },
+	];
+	
+	const compiledMarkers = [];
+
+	for (const marker of markers) {
+		const {pos, colorCode} = marker;
+		const color = new THREE.Color();
+		color.setHex(colorCode);
+		const sphereGeom = new THREE.SphereGeometry(
+			.1, // radius 
+			8, // widthSegments 
+			8, // heightSegments 
+		);
+		const sphereMaterial = new THREE.MeshBasicMaterial({
+		    color: color,
+		});
+		const sphereMesh = new THREE.Mesh(sphereGeom, sphereMaterial);
+		sphereMesh.position.set(...pos);
+		scene.add(sphereMesh);
+		const compiledMarker = {
+			pos: pos,
+			rotatedPos: pos,
+			colorCode: colorCode,
+			color: color,
+			geom: sphereGeom,
+			material: sphereMaterial,
+			mesh: sphereMesh,
+		};
+		compiledMarkers.push(compiledMarker);
+	}
 	
 	const boxGeom = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
 	const boxMat = new THREE.MeshBasicMaterial({
-	    vertexColors: true
+	    //vertexColors: true,
+		wireframe: true,
 	});
 	const positionAttribute = boxGeom.getAttribute('position');
 	const colors = [];
@@ -130,31 +185,6 @@ export function testRotations(report) {
 
 	scene.add(boxMesh);
 
-	////
-
-	const width = 400;
-	const height = 320;
-	
-	const canvas = report.createCanvas(width, height);
-	
-	const renderer = new THREE.WebGLRenderer({canvas: canvas});
-	
-	const camera = new THREE.PerspectiveCamera(
-		50, // FOV
-		width / height, // aspect
-		0.1, // near clipping plane
-		10000, // far clipping plane
-	);
-
-	const orbitControls = new OrbitControls(camera, renderer.domElement);
-	//orbitControls.addEventListener('change', () => { needsRedraw = true; });
-	
-	camera.position.set(4 , 2, 2);
-	camera.lookAt(0, 0, 0);
-	camera.updateProjectionMatrix();
-	
-	orbitControls.update();
-
 	const axesHelper = new THREE.AxesHelper(1000);
 	scene.add(axesHelper);
 	
@@ -167,34 +197,190 @@ export function testRotations(report) {
 	scene.add(directionalLight);
 	console.log(directionalLight);
 	console.log(directionalLight.intensity);
-    
-    renderer.render(scene, camera);
-
-	const aniImgURLs = [];
 	
-    
-	aniImgURLs.push({
-		url: canvas.toDataURL(),
-		caption: `Before rotation`,
-	});
-
-	const axis = new THREE.Vector3(1, 1, 1);
-	
-	axis.normalize();
-
-	const origin = new THREE.Vector3(0, 0, 0);
-	
-	const axisHelper = new THREE.ArrowHelper(axis, origin, 2);
-
+	const axisHelper = new THREE.ArrowHelper(
+		new THREE.Vector3(...normalizedAxisVector), 
+		new THREE.Vector3(...axisArrowStartPos),
+		axisArrowLength
+	);
 	scene.add(axisHelper);
-	boxMesh.rotateOnAxis(axis, Math.PI/8);
-    renderer.render(scene, camera);
-
-	aniImgURLs.push({
-		url: canvas.toDataURL(),
-		caption: "After rotation",
-	});
-	report.logImages(aniImgURLs);
-
 	
+	// set up tiles
+
+	const tileWidth = 200;
+	const tileHeight = 160;
+	const tileGridWidth = 2;
+	const tileGridHeight = 2;
+	const numberOfTiles = tileGridHeight * tileGridWidth;
+
+	const canvasWidth = tileWidth * tileGridWidth;
+	const canvasHeight = tileHeight * tileGridHeight;
+
+	const tiles = [
+		{
+			index: 0,
+			mnemonic: "UL",
+			camera: (() => {
+				const camera = new THREE.OrthographicCamera( 
+					-2, // left 
+					2, // right
+					((2 + 2) * (tileHeight/tileWidth)) / 2, // top
+					-((2 + 2) * (tileHeight/tileWidth)) / 2, // bottom
+					.1, // near clipping plane 
+					10000, // far clipping plane 
+				);
+				camera.position.set(2, 2, 2);
+				camera.lookAt(0, 0, 0);
+				camera.updateProjectionMatrix();
+				return camera;
+			})(),
+		},
+		{
+			index: 1,
+			mnemonic: "UR",
+			camera: (() => {
+				const camera = new THREE.OrthographicCamera( 
+					-2, // left 
+					2, // right
+					((2 + 2) * (tileHeight/tileWidth)) / 2, // top
+					-((2 + 2) * (tileHeight/tileWidth)) / 2, // bottom
+					.1, // near clipping plane 
+					10000, // far clipping plane 
+				);
+				camera.position.set(0, 5, 0);
+				camera.lookAt(0, 0, 0);
+				camera.updateProjectionMatrix();
+				return camera;
+			})(),
+		},
+		{
+			index: 2,
+			mnemonic: "LL",
+			camera: (() => {
+				const camera = new THREE.OrthographicCamera( 
+					-2, // left 
+					2, // right
+					((2 + 2) * (tileHeight/tileWidth)) / 2, // top
+					-((2 + 2) * (tileHeight/tileWidth)) / 2, // bottom
+					.1, // near clipping plane 
+					10000, // far clipping plane 
+				);
+				camera.position.set(5, 0, 0);
+				camera.lookAt(0, 0, 0);
+				camera.updateProjectionMatrix();
+				return camera;
+			})(),
+		},
+		{
+			index: 3,
+			mnemonic: "LR",
+			camera: (() => {
+				const camera = new THREE.PerspectiveCamera(
+					50, // FOV
+					tileWidth / tileHeight, // aspect
+					0.1, // near clipping plane
+					10000, // far clipping plane
+				);
+				camera.position.set(2, 3, 4);
+				camera.lookAt(0, 0, 0);
+				camera.updateProjectionMatrix();
+				return camera;
+			})(),
+		},
+	];
+	
+	if (tiles.length !== numberOfTiles) {
+		throw new Error(`invariant violation`);
+	}
+
+	// generate frames 
+	
+	const aniFrames = [];
+
+	const frameCanvas = report.createCanvas(canvasWidth, canvasHeight);
+	const frameCanvasCtx = frameCanvas.getContext("2d");
+
+	const compiledTiles = new Array(numberOfTiles);
+	let tileIndex = 0;
+	for (let v = 0; v < tileGridHeight; v++) {
+		for (let h = 0; h < tileGridWidth; h++) {
+			const tile = tiles[tileIndex];
+			if (tile.index !== tileIndex) {
+				throw new Error(`invariant violation`);
+			}
+			const tileCanvas = report.createCanvas(tileWidth, tileHeight);
+			const tileRenderer = new THREE.WebGLRenderer({canvas: tileCanvas});
+			const compiledTile = {
+				camera: tile.camera,
+				canvas: tileCanvas,
+				renderer: tileRenderer,
+				x0: h * tileWidth,
+				y0: v * tileHeight,
+			};
+			compiledTiles[tileIndex] = compiledTile;
+			tileIndex++;			
+		}
+	}
+	
+	const renderFrame = (caption) => {
+		for (const compiledTile of compiledTiles) {
+			const {
+				camera,
+				canvas,
+				renderer,
+				x0, y0,
+			} = compiledTile;
+			renderer.render(scene, camera);
+			frameCanvasCtx.drawImage(canvas, x0, y0);			
+		}
+		aniFrames.push({
+			url: frameCanvas.toDataURL(),
+			caption: caption,
+		});
+	};
+	
+	renderFrame("Before rotation");    
+
+	const angle = Math.PI/8;
+	
+	report.outputLine(`boxMesh.quaternion: ${boxMesh.quaternion.toArray()}`);
+	
+	boxMesh.rotateOnAxis(
+		new THREE.Vector3(...normalizedAxisVector), 
+		angle
+	);
+
+	const rotationQuaternion = rotationQuaternionAboutAxis(
+		angle,
+		normalizedAxisVector,
+	);
+
+	report.outputLine(`rotationQuaternion: ${strQ(rotationQuaternion)}`);
+	
+	report.outputLine(`boxMesh.quaternion: ${boxMesh.quaternion.toArray()}`);
+	
+	const rotationMatrix = rotationMatrixForQuaternion(
+		rotationQuaternion
+	);
+
+	report.outputLine(`rotationMatrix: ${strM3(rotationMatrix)}`);
+
+	const threeRotationMatrix = new THREE.Matrix4();
+	threeRotationMatrix.makeRotationAxis (new THREE.Vector3(...normalizedAxisVector), angle);
+	
+	report.outputLine(`THREE.rotationMatrix: ${threeRotationMatrix.elements}`);
+
+	for (const compiledMarker of compiledMarkers) {
+		const {
+			pos,
+			mesh,
+		} = compiledMarker;
+		const rotatedPos = multM3V3(rotationMatrix, pos);
+		compiledMarker.rotatedPos = rotatedPos;
+		mesh.position.set(...rotatedPos);
+	}
+	
+	renderFrame("After rotation");
+	
+	report.logAnimation(aniFrames);
 }

@@ -33,9 +33,10 @@ export function pureQuaternionForVector(v) {
 
 export function rotationQuaternionAboutAxis(angle, axis) {
        const halfAngle = angle / 2;
-       const cosReciprocal = 1 / Math.cos(halfAngle);
-       const sinReciprocal = 1 / Math.sin(halfAngle);
-       return [cosReciprocal, scaleV3(sinReciprocal, axis)];
+       const cosHalfAngle = Math.cos(halfAngle);
+       const sinHalfAngle = Math.sin(halfAngle);
+       const scaledAxis = scaleV3(sinHalfAngle, axis);
+       return [cosHalfAngle, scaledAxis];
 }
 
 export function rotationMatrixForQuaternion([r, [i, j, k]]) {

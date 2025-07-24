@@ -106,9 +106,9 @@ export class ImageParagraph extends TestParagraph {
     }
 }
 
-export class ImagesParagraph extends TestParagraph {
+export class AnimationParagraph extends TestParagraph {
     
-    constructor(parentSection, idx, images, noHash) {
+    constructor(parentSection, idx, frames, noHash) {
         super(parentSection, idx);
 
         this.noHash = noHash;
@@ -131,18 +131,18 @@ export class ImagesParagraph extends TestParagraph {
         const mainElement = document.createElement("div");
         this.mainElement = mainElement;
         
-        const numberOfImages = images.length;
-        this.numberOfImages = numberOfImages;
+        const numberOfFrames = frames.length;
+        this.numberOfFrames = numberOfFrames;
         
-        this.imgContainerElements = new Array(numberOfImages);
-        this.imgHashHexes = new Array(numberOfImages);
-        this.numberOfImagesLoaded = 0;
-        this.numberOfImagesHashed = 0;
+        this.frameContainerElements = new Array(numberOfFrames);
+        this.frameHashHexes = new Array(numberOfFrames);
+        this.numberOfFramesLoaded = 0;
+        this.numberOfFramesHashed = 0;
 
-        this.currDisplayingImgIndex = -1;
+        this.currDisplayingFrameIndex = -1;
         
-        for (let i = 0; i < numberOfImages; i++) {
-            const { url, caption } = images[i];
+        for (let i = 0; i < numberOfFrames; i++) {
+            const { url, caption } = frames[i];
 
             const containerElement = document.createElement("div");
                 
@@ -155,16 +155,18 @@ export class ImagesParagraph extends TestParagraph {
                 containerElement.appendChild(captionElement);
             }
             
-            this.imgContainerElements[i] = containerElement;
-            this.imgHashHexes[i] = "";
+            this.frameContainerElements[i] = containerElement;
+            this.frameHashHexes[i] = "";
             
             if (!this.noHash) {
                 fetch(url).then(r => r.blob().arrayBuffer().then((arrayBuffer) => {
                     const hasher = sha256();
                     const uint8View = new Uint8Array(arrayBuffer);
+                    hasher.add(caption);
+                    hasher.add("\0");
                     hasher.add(uint8View);
-                    this.imgHashHexes[i] = hasher.digest().hex();
-                    this.numberOfImagesHashed++;
+                    this.frameHashHexes[i] = hasher.digest().hex();
+                    this.numberOfFramesHashed++;
                     this.reportIfFinished();            
                 }));
             }
@@ -172,10 +174,10 @@ export class ImagesParagraph extends TestParagraph {
             imgElement.onload = () => {
                 if (i === 0) {
                     this.mainElement.appendChild(containerElement);
-                    this.counterSpan.innerText = `1/${this.numberOfImages}`;
-                    this.currDisplayingImgIndex = 0;
+                    this.counterSpan.innerText = `1/${this.numberOfFrames}`;
+                    this.currDisplayingFrameIndex = 0;
                 }
-                this.numberOfImagesLoaded++;
+                this.numberOfFramesLoaded++;
                 this.reportIfFinished();
             }
             
@@ -186,23 +188,23 @@ export class ImagesParagraph extends TestParagraph {
         this.contentElement.appendChild(this.mainElement);
         
         mainElement.onclick = (evt) => {
-           if (this.currDisplayingImgIndex >= 0 && this.finished) {
-               const currImgIndex = this.currDisplayingImgIndex;
-               const nextImgIndex = (currImgIndex + 1) % this.numberOfImages;
-               const currImgContainerElement = this.imgContainerElements[currImgIndex];
-               const nextImgContainerElement = this.imgContainerElements[nextImgIndex];
-               currImgContainerElement.replaceWith(nextImgContainerElement);
-               this.currDisplayingImgIndex = nextImgIndex;
-                this.counterSpan.innerText = `${nextImgIndex+1}/${this.numberOfImages}`;
+           if (this.currDisplayingFrameIndex >= 0 && this.finished) {
+               const currFrameIndex = this.currDisplayingFrameIndex;
+               const nextFrameIndex = (currFrameIndex + 1) % this.numberOfFrames;
+               const currFrameContainerElement = this.frameContainerElements[currFrameIndex];
+               const nextFrameContainerElement = this.frameContainerElements[nextFrameIndex];
+               currFrameContainerElement.replaceWith(nextFrameContainerElement);
+               this.currDisplayingFrameIndex = nextFrameIndex;
+                this.counterSpan.innerText = `${nextFrameIndex+1}/${this.numberOfFrames}`;
            } 
         }
     }
 
     reportIfFinished() {
-        if (this.numberOfImagesLoaded === this.numberOfImages 
-            && (this.noHash || this.numberOfImagesHashed === this.numberOfImages)) {
+        if (this.numberOfFramesLoaded === this.numberOfFrames 
+            && (this.noHash || this.numberOfFramesHashed === this.numberOfFrames)) {
             const hasher = sha256();
-            for (const hashHex of this.imgHashHexes) {
+            for (const hashHex of this.frameHashHexes) {
                 hasher.add(hashHex);
             }
             this.hashHex = hasher.digest().hex();
@@ -305,9 +307,9 @@ export class TestSection {
             new ImageParagraph(this, this.paragraphEntries.length, url, noHash));
     }
 
-    addImages(urls, noHash) {
+    addAnimation(frames, noHash) {
         const imageParagraph = this._addParagraph(
-            new ImagesParagraph(this, this.paragraphEntries.length, urls, noHash));
+            new AnimationParagraph(this, this.paragraphEntries.length, frames, noHash));
     }
 
     addLine(str, noHash) {
@@ -529,11 +531,11 @@ export class TestReport {
         this.currSection.addImage(url, !hash);
     }
     
-    logImages(urls, hash) {
+    logAnimation(frames, hash) {
         if (hash === undefined) {
             hash = false;
         }
-        this.currSection.addImages(urls, !hash);
+        this.currSection.addAnimation(frames, !hash);
     }
 
     createCanvas(width, height) {
