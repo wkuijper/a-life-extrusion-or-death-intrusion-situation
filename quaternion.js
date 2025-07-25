@@ -1,58 +1,60 @@
 import { 
        strV3, addV3, dotV3, scaleV3, crossV3, negV3, normSqV3,
+       normSqV4, addV4, scaleV4,
 } from "./linalg.js";
 
-export function strQ([s, v]) {
-       return `[${s}, ${strV3(v)}]`;
+export function quaternionToString([i, j, k, r]) {
+       return `[${i}, ${j}, ${k}, ${r}]`;
 }
 
-export function addQ([s, v], [t, w]) {
-       return [s + t, addV3(v, w)];
+export function addQuaternions(a, b) {
+       return addV4(a, b);
 }
 
-export function multQ([s, v], [t, w]) {
-       return [s * t - dotV3(v, w), addV3(addV3(scaleV3(s, w), scaleV3(t, v)), crossV3(v, w))]; 
+export function multiplyQuaternions([ai, aj, ak, ar], [bi, bj, bk, br]) {
+       const aV = [ai, aj, ak];
+       const bV = [bi, bj, bk];
+       return [...addV3(
+                      addV3(scaleV3(ar, bV), 
+                            scaleV3(br, aV)), 
+                      crossV3(aV, bV)),
+              ar * br - dotV3(aV, bV)]; 
 }
 
-export function reciprocalQ([s, v]) {
-       const divisor = s * s + normSqV3(v);
+export function reciprocateQuaternion(q) {
+       const divisor = normSqV4(q);
        if (divisor === 0) {
               return null;
        }
        const reciprocal = 1 / divisor;
-       return [reciprocal * s, scaleV3(reciprocal, v)];
+       const conjQ = conjugateQuaternion(q);
+       return scaleV4(reciprocal, conjQ);
 }
 
-export function conjQ([s, v]) {
-       return [s, negV3(v)];
+export function conjugateQuaternion([i, j, k, r]) {
+       return [-i, -j, -k, r];
 }
 
-export function pureQuaternionForVector(v) {
-       return [0, v];
+export function identityQuaternion() {
+       return [0, 0, 0, 1];
+}
+       
+export function pureQuaternionForVector([i, j, k]) {
+       return [i, j, k, 0];
 }
 
-export function rotationQuaternionAboutAxis(angle, axis) {
+export function rotationQuaternionForAxisAngle(axis, angle) {
        const halfAngle = angle / 2;
-       const cosHalfAngle = Math.cos(halfAngle);
        const sinHalfAngle = Math.sin(halfAngle);
-       const scaledAxis = scaleV3(sinHalfAngle, axis);
-       return [cosHalfAngle, scaledAxis];
+       const cosHalfAngle = Math.cos(halfAngle);
+       const axisScaledBySinHalfAngle = scaleV3(sinHalfAngle, axis);
+       return [...axisScaledBySinHalfAngle, cosHalfAngle];
 }
-
-export function rotationMatrixForQuaternion([r, [i, j, k]]) {
-       const ii = i * i;
-       const jj = j * j;
-       const kk = k * k;
        
-       const ij = i * j;
-       const ir = i * r;
-       const ik = i * k;
-       
-       const jr = j * r;
-       const jk = j * k;
-
-       const kr = k * r;
-       
+export function rotationMatrixForQuaternion([i, j, k, r]) {
+       const ii = i * i; const jj = j * j; const kk = k * k;
+       const ij = i * j; const ir = i * r; const ik = i * k;
+       const jr = j * r; const jk = j * k; const kr = k * r;
        return [
               1 - 2*(jj + kk), 2*(ij - kr), 2*(ik + jr),
               2 * (ij + kr), 1 - 2 * (ii + kk), 2 * (jk - ir),
@@ -60,5 +62,15 @@ export function rotationMatrixForQuaternion([r, [i, j, k]]) {
        ];
 }
 
+export function rotateVectorByQuaternion([x, y, z], [i, j, k, r]) {
+       const ii = i * i; const jj = j * j; const kk = k * k;
+       const ij = i * j; const ir = i * r; const ik = i * k;
+       const jr = j * r; const jk = j * k; const kr = k * r;
+       return [
+              (1 - 2*(jj + kk)) * x + (2*(ij - kr)) * y + (2*(ik + jr)) * z,
+              (2 * (ij + kr)) * x + (1 - 2 * (ii + kk)) * y + (2 * (jk - ir)) * z,
+              (2 * (ik - jr)) * x + (2 * (jk + ir)) * y + (1 - 2 * (ii + jj)) * z,
+       ];
+}
 
 

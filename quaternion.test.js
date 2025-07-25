@@ -4,10 +4,15 @@ import {
 } from "./linalg.js";
 
 import {
-	strQ, addQ, multQ, reciprocalQ, conjQ, 
+	quaternionToString, 
+	addQuaternions, 
+	multiplyQuaternions, 
+	reciprocateQuaternion, 
+	conjugateQuaternion, 
 	pureQuaternionForVector, 
-	rotationQuaternionAboutAxis, 
+	rotationQuaternionForAxisAngle, 
 	rotationMatrixForQuaternion,
+	rotateVectorByQuaternion,
 } from "./quaternion.js";
 
 import * as THREE from "./three.module.js";
@@ -42,11 +47,11 @@ export function testAdd(report) {
 	const outputLine = report.outputLine;
     const prefix = "";
 	
-	const q = [4, [3, 4, 5]];
-	const r = [2, [1, 2, 3]];
-	const s = addQ(q, r);
+	const q = [3, 4, 5, 4];
+	const r = [1, 2, 3, 2];
+	const s = addQuaternions(q, r);
 
-	outputLine(`${strQ(q)} + ${strQ(r)} = ${strQ(s)}`);
+	outputLine(`${quaternionToString(q)} + ${quaternionToString(r)} = ${quaternionToString(s)}`);
 }
 
 export function testMult(report) {
@@ -54,25 +59,29 @@ export function testMult(report) {
 	const outputLine = report.outputLine;
     const prefix = "";
 	
-	const q = [4, [3, 4, 5]];
-	const r = [2, [1, 2, 3]];
-	const s = multQ(q, r);
+	const q = [3, 4, 5, 4];
+	const r = [1, 2, 3, 2];
+	const s = multiplyQuaternions(q, r);
 
 	const qT = new THREE.Quaternion(3, 4, 5, 4);
 	const rT = new THREE.Quaternion(1, 2, 3, 2);
 	const sT = qT.clone().multiply(rT);
 
-	outputLine(`${strQ(q)} + ${strQ(r)} = ${strQ(s)} (${sT.toArray()})`);
+	outputLine(`${quaternionToString(q)} + ${quaternionToString(r)} = ${quaternionToString(s)} (${sT.toArray()})`);
 }
 
 export function testReciprocal(report) {
 	const outputLine = report.outputLine;
     const prefix = "";
 	
-	const q = [4, [3, 4, 5]];
-	const s = reciprocalQ(q);
+	const q = [3, 4, 5, 4];
+	const s = reciprocateQuaternion(q);
 
-	outputLine(`${strQ(q)} = ${strQ(s)}`);
+	outputLine(`${quaternionToString(q)} = ${quaternionToString(s)}`);
+
+	const qq = multiplyQuaternions(s, q);
+
+	outputLine(`${quaternionToString(qq)}`);
 }
 
 export function testConj(report) {
@@ -80,13 +89,13 @@ export function testConj(report) {
 	const outputLine = report.outputLine;
     const prefix = "";
 	
-	const q = [4, [3, 4, 5]];
-	const s = conjQ(q);
+	const q = [3, 4, 5, 4];
+	const s = conjugateQuaternion(q);
 
 	const qT = new THREE.Quaternion(3, 4, 5, 4);
 	const sT = qT.clone().conjugate();
 
-	outputLine(`conj${strQ(q)} = ${strQ(s)} (${sT.toArray()})`);
+	outputLine(`conj${quaternionToString(q)} = ${quaternionToString(s)} (${sT.toArray()})`);
 }
 
 export function testRotations(report) {
@@ -95,8 +104,7 @@ export function testRotations(report) {
 
 	const axisVector = [1, 1, 1];
 	const normalizedAxisVector = normalizeV3(axisVector);
-	const axisArrowLength = 3;
-	const axisArrowStartPos = scaleV3(-(axisArrowLength/4), axisVector);
+	const axisArrowLength = 2;
 
 	// set up scene
 	
@@ -200,10 +208,24 @@ export function testRotations(report) {
 	
 	const axisHelper = new THREE.ArrowHelper(
 		new THREE.Vector3(...normalizedAxisVector), 
-		new THREE.Vector3(...axisArrowStartPos),
+		new THREE.Vector3(0, 0, 0),
 		axisArrowLength
 	);
 	scene.add(axisHelper);
+
+	const reset = () => {
+		for (const compiledMarker of compiledMarkers) {
+			const pos = compiledMarker.pos;
+			compiledMarker.rotatedPos = pos;
+			compiledMarker.mesh.position.set(...pos);
+		}
+		
+		boxMesh.position.set(0, 0, 0);
+		boxMesh.quaternion.set(0, 0, 0, 1);
+		boxMesh.scale.set(1, 1, 1);
+
+		axisHelper.setDirection(new THREE.Vector3(1, 0, 0));
+	};
 	
 	// set up tiles
 
@@ -350,12 +372,12 @@ export function testRotations(report) {
 		angle
 	);
 
-	const rotationQuaternion = rotationQuaternionAboutAxis(
-		angle,
+	const rotationQuaternion = rotationQuaternionForAxisAngle(
 		normalizedAxisVector,
+		angle,
 	);
 
-	report.outputLine(`rotationQuaternion: ${strQ(rotationQuaternion)}`);
+	report.outputLine(`rotationQuaternion: ${quaternionToString(rotationQuaternion)}`);
 	
 	report.outputLine(`boxMesh.quaternion: ${boxMesh.quaternion.toArray()}`);
 	
@@ -381,6 +403,116 @@ export function testRotations(report) {
 	}
 	
 	renderFrame("After rotation");
+
+	report.logAnimation(aniFrames);
+
+	//
+
+	aniFrames.length = 0;
+
+	reset();
+
+	renderFrame("Before rotation over x-axis");
+
+	const xAxis = [1, 0, 0];
+	const yAxis = [0, 1, 0];
+	const zAxis = [0, 0, 1];
+
+	const angleFromDegrees = (degrees) => {
+		return (degrees/180) * Math.PI;
+	};
+
+	const rotateByQuaternion = (quaternion) => {
+		for (const compiledMarker of compiledMarkers) {
+			const currPos = compiledMarker.rotatedPos;
+			const rotatedPos = 
+				rotateVectorByQuaternion(
+					currPos, 
+					quaternion
+				);
+			compiledMarker.rotatedPos = rotatedPos;
+			compiledMarker.mesh.position.set(...rotatedPos);
+		}
+		boxMesh.quaternion.premultiply(new THREE.Quaternion(...quaternion));
+	};
+
+	const xRotationQuaternion = rotationQuaternionForAxisAngle(
+		xAxis, 
+		angleFromDegrees(30)
+	);
+
+	rotateByQuaternion(xRotationQuaternion);
+
+	renderFrame("After rotation over x-axis");
+	
+	const yAxisRotatedOverX = 
+		rotateVectorByQuaternion(
+			yAxis,
+			xRotationQuaternion
+		);
+
+	axisHelper.setDirection(
+		new THREE.Vector3(...yAxisRotatedOverX)
+	);
+	
+	renderFrame("Before rotation over rotated y-axis");
+	
+	const yRotationQuaternion = 
+		rotationQuaternionForAxisAngle(
+			yAxisRotatedOverX, 
+			angleFromDegrees(15)
+		);
+
+	rotateByQuaternion(yRotationQuaternion)
+
+	renderFrame("After rotation over rotated y-axis");
+
+	const xyRotationQuaternion = 
+		multiplyQuaternions(
+				yRotationQuaternion,
+				xRotationQuaternion 
+			);
+	
+	const zAxisRotatedOverXandY = 
+		rotateVectorByQuaternion(
+			zAxis,
+			xyRotationQuaternion
+		);
+
+	axisHelper.setDirection(
+		new THREE.Vector3(...zAxisRotatedOverXandY)
+	);
+	
+	renderFrame("Before rotation over rotated z-axis");
+	
+	const zRotationQuaternion = 
+		rotationQuaternionForAxisAngle(
+			zAxisRotatedOverXandY, 
+			angleFromDegrees(20)
+		);
+
+	rotateByQuaternion(zRotationQuaternion)
+
+	renderFrame("After rotation over rotated z-axis");
+	
+	const xyzRotationQuaternion = 
+		multiplyQuaternions(
+				zRotationQuaternion,
+				xyRotationQuaternion 
+			);
+
+	const resetQuaternion = 
+		reciprocateQuaternion(xyzRotationQuaternion);
+	
+	axisHelper.setDirection(
+		new THREE.Vector3(...resetQuaternion)
+	);
+	
+	renderFrame("Before rotation over combined reset axis");
+
+	rotateByQuaternion(resetQuaternion);
+	
+	renderFrame("After rotation over combined reset axis");
 	
 	report.logAnimation(aniFrames);
 }
