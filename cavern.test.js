@@ -37,7 +37,7 @@ class Net {
         
         this.__totalAnimationTime = 0;
 
-        this.__finished = false;
+        this.__compiled = false;
 
         this.__netFaces = [];
         this.__netVertices = [];
@@ -58,8 +58,8 @@ class Net {
         return animationStep;
     }
 
-    finish() {
-        if (this.__finished) {
+    compile() {
+        if (this.__compiled) {
             throw new Error(`invariant violation`);
         }
         
@@ -91,7 +91,7 @@ class Net {
 
         animationStates[0] = initialState;
         
-        this.__finished = true;
+        this.__compiled = true;
         this.__animationStates = animationStates;
 
         let firstRelevantAnimationStep = null;
@@ -104,7 +104,7 @@ class Net {
                 firstRelevantAnimationStep = animationStep;
                 firstRelevantAnimationState = fromState;
             }
-            animationStep._leap(fromState, toState);
+            animationStep._compile(fromState, toState);
         }
         this.__firstRelevantAnimationStep = firstRelevantAnimationStep;
         this.__firstRelevantAnimationState = firstRelevantAnimationState;
@@ -141,11 +141,9 @@ class Net {
         const fromState = animationStates[index];
         const toState = animationStates[index+1];
         const animationStates = this.__animationStates;
-        animationStep._interpolate(
-            fromState, 
-            this.__currAnimationState, 
+        animationStep._interpolate( 
             animationStepTime, 
-            toState
+            this.__currAnimationState,
         );
         this.__currAnimationTime = animationTime;
         this.__currAnimationStepTime = animationStepTime;
@@ -363,7 +361,11 @@ class AnimationStep {
         return this._nextStep;
     }
     
-    constructor(parentNet, index, previousStep) {
+    get previousStep() {
+        return this.__previousStep;
+    }
+    
+    constructor(net, index, previousStep) {
         this.__net = net;
         this.__index = index;
         this.__previousStep = previousStep;
@@ -375,6 +377,10 @@ class AnimationStep {
         
         this.__changes = [];
         this.__changedNetFaces = new Map();
+
+        this.__fromState = null;
+        this.__toState = null;
+        this.__compiled = false;
     }
     
     color(primitives, frontColor, backColor) {
@@ -412,15 +418,24 @@ class AnimationStep {
         }
     }
 
-    _leap(fromState, toState) {
-        for (const change of this.__changes) {
-            change._leap(fromState, toState);
+    _compile(fromState, toState) {
+        if (this.__compiled) {
+            throw new Error(`invariant violation: compile called more than once`);
         }
+        this.__fromState = fromState;
+        this.__toState = toState;
+        for (const change of this.__changes) {
+            change._compile(fromState, toState);
+        }
+        this.__compiled = true;
     }
 
-    _interpolate(fromState, betweenState, atStepTime, toState) {
+    _interpolate(atStepTime, betweenState) {
+        if (!this.__compiled) {
+            throw new Error(`invariant violation: interpolate called on uncompiled AnimationStep`);
+        }
         for (const change of this.__changes) {
-            change._interpolate(fromState, betweenState, atStepTime, toState);
+            change._interpolate(betweenState, atStepTime);
         }
     }
 }
@@ -482,6 +497,23 @@ class NetChange {
             }
         }
         this.__netVertexSet = netVertexSet;   
+
+        this.__compiled = false;
+    }
+
+    _compile(fromState, toState) {
+        if (this.__compiled) {
+            throw new Error(`invariant violation: compile called more than once`);
+        }
+        this.__compile(fromState, toState);
+        this.__compiled = true;
+    }
+
+    _interpolate(stepTime, progressRatio, betweenState) {}
+        if (!this.__compiled) {
+            throw new Error(`invariant violation: interpolation called before compile`);
+        }
+        this.__interpolate(stepTime, progressRatio, betweenState);
     }
 }
 
@@ -491,15 +523,18 @@ class Coloring extends NetChange {
         super(animationStep, id, primitives);
         this.__frontColor = frontColor;
         this.__backColor = backColor;
+        this.__fromState = null;
     }
 
-    _leap(fromState, toState) {
+    __compile(fromState, toState) {
         for (const netFace of this.netFaces()) {
             toState._setNetFaceColors(netFace, this.__frontColor, this.__backColor);
         }
     }
     
-    _interpolate(fromState, oneMinusProgressRatio, betweenState, progressRatio, toState) {
+    __interpolate(stepTime, progressRatio, betweenState) {
+        const fromState = this.__fromState;
+        const oneMinusProgressRatio = 1 - progressRatio;
         for (const netFace of this.netFaces()) {
             const [fromFrontColor, fromBackColor] = fromState._getNetFaceColors(netFace);
             const [toFrontColor, toBackColor] = [this.__frontColor, this.__backColor]; // === toState._getNetFaceColors(netFace);
@@ -514,13 +549,18 @@ class Coloring extends NetChange {
 
 class Explosion extends NetChange {
 
-    constructor(animationStep, id, halfFace, distance) {
+    constructor(animationStep, id, primitives, halfFace, distance) {
         super(animationStep, id, primitives);
         this.__netFace = animationStep.net._getOrCreateNetFace(halfFace);
         this.__distance = distance;
+        this.__fromState = null;
+        this.__toState = null;
     }
 
-    _leap(fromState, toState) {
+    __compile(fromState, toState) {
+        this.__fromState = fromState;
+        this.__toState = toState;
+        
         const netFace = this.__netFace;
         const netVertex1 = netFace.netVertex1;
         const netVertex2 = netFace.netVertex1;
@@ -548,7 +588,8 @@ class Explosion extends NetChange {
         }
     }
     
-    _interpolate(fromState, oneMinusProgressRatio, betweenState, progressRatio, toState) {
+    __interpolate(stepTime, progressRatio, betweenState) {
+        const oneMinusProgressRatio = 1 - progressRatio;
         for (const netVertex of this.netVertices()) {
             const sourcePosition = fromState._getNetVertexPosition(netVertex);
             const targetPosition = toState._getNetVertexPosition(netVertex);
@@ -560,6 +601,67 @@ class Explosion extends NetChange {
     }
 }
 
+class Folding extends NetChange {
+
+    constructor(animationStep, id, primitives, halfEdge, angle) {
+        super(animationStep, id, primitives);
+        this.__sourceNetVertex = animationStep.net._getOrCreateNetVertex(halfEdge);
+        this.__targetNetVertex = animationStep.net._getOrCreateNetVertex(halfEdge.nextHalfEdge);
+        this.__angle = angle;
+        this.__fromState = null;
+        this.__axis = null;
+    }
+
+    __rotate(angle, targetState) {
+        const fromState = this.__fromState;
+        const axis = this.__axis;
+        
+        const rotationQuaternion = rotationQuaternionForAxisAngle(axis, angle);
+
+        const rotationMatrix = rotationMatrixForQuaternion(rotationQuaternion);
+            
+        const affineRotationPostTranslationMatrix = 
+            composeAffineM3V3(rotationMatrix, p0);
+
+        const affinePreTranslationMatrix = 
+            composeAffineM3V3(identityM3(), negV3(p0));
+
+        // TODO: determine if we need premultiply instead here:
+        const finalMatrix = 
+            multM4(affinePreTranslationMatrix, affineRotationPostTranslationMatrix);
+        
+        for (const netVertex of this.netVertices()) {
+            const sourcePosition = fromState._getNetVertexPosition(netVertex);
+            const targetPosition = applyM4V3(finalMatrix, sourcePosition);
+            targetState._setNetVertexPosition(netVertex, targetPosition);
+        }
+    }
+    
+    __compile(fromState, toState) {
+        this.__fromState = fromState;
+        const sourceNetVertex = this.__sourceNetVertex;
+        const targetNetVertex = this.__targetNetVertex;
+        const p0 = fromState._getNetVertexPosition(sourceNetVertex);
+        const p1 = fromState._getNetVertexPosition(targetNetVertex);
+        const dV = subtractV3(p1, p0);
+        const axis = normalizeV3(dV);
+        
+        if (axis === null) {
+            throw new Error(`invariant violation: can't create normalized axis for degenerate halfedge`);
+        }
+
+        this.__axis = axis;
+        
+        const angle = this.__angle;
+        this.__rotate(angle, toState);
+    }
+    
+    __interpolate(stepTime, progressRatio, betweenState) {
+        const angle = this.__angle * progressRatio;
+        this.__rotate(angle, betweenState);
+    }
+}
+
 class Laying extends NetChange {
 
     constructor(animationStep, id, halfFace, halfEdgeInHalfFace, plane, locationOfSourceVertexInPlane, directionOfHalfEdgeInPlane) {
@@ -567,8 +669,13 @@ class Laying extends NetChange {
         this.__halfFace = halfFace;
         this.__halfEdgeInHalfFace = halfEdgeInHalfFace;
         this.__plane = plane;
+        this.__fromState = null;
     }
-    
+
+    __compile(fromState, toState) {
+        this.__fromState = fromState;
+        
+    }
 }
 
 /*class NetNode {
