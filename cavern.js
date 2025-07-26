@@ -526,7 +526,15 @@ class Vertex {
     get z() {
         return this.__z;
     }
-    
+
+	anchorPosition() {
+		return [this.__anchorX, this.__anchorY, this.__anchorZ];
+	}
+	
+	position() {
+		return [this.__x, this.__y, this.__z];
+	}
+	
     constructor(grid, anchorX, anchorY, anchorZ) {
         this.__grid = grid;
         this._index = -1; // set by parent grid

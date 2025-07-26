@@ -151,9 +151,9 @@ export function testRotations(report) {
 	}
 	
 	const boxGeom = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
-	const boxMat = new THREE.MeshBasicMaterial({
-	    //vertexColors: true,
-		wireframe: true,
+	const boxMat = new THREE.MeshStandardMaterial({
+	    vertexColors: true,
+		//wireframe: true,
 	});
 	const positionAttribute = boxGeom.getAttribute('position');
 	const colors = [];
@@ -196,15 +196,15 @@ export function testRotations(report) {
 	const axesHelper = new THREE.AxesHelper(1000);
 	scene.add(axesHelper);
 	
-	const ambientLight = new THREE.AmbientLight(0xffffff);
+	const ambientLight = new THREE.AmbientLight(0xffffff, 4);
 	scene.add(ambientLight);
-	console.log(ambientLight);
-	console.log(ambientLight.intensity);
 	
-	const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
+	const directionalLight = new THREE.DirectionalLight(0xffffff, 20);
 	scene.add(directionalLight);
-	console.log(directionalLight);
-	console.log(directionalLight.intensity);
+
+	/*const pointLight = new THREE.PointLight(0xffffff, 300);
+	pointLight.position.set(-1, 2, 3);
+	scene.add(pointLight);*/
 	
 	const axisHelper = new THREE.ArrowHelper(
 		new THREE.Vector3(...normalizedAxisVector), 
