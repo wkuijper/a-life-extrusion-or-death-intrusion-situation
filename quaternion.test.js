@@ -315,7 +315,9 @@ export function testRotations(report) {
 		throw new Error(`invariant violation`);
 	}
 
-	// generate frames 
+	// generate animations 
+
+	report.startSection("single", "Single Rotation");
 	
 	const aniFrames = [];
 
@@ -361,7 +363,7 @@ export function testRotations(report) {
 		});
 	};
 	
-	renderFrame("Before rotation");    
+	renderFrame(`Before rotation`);    
 
 	const angle = Math.PI/8;
 	
@@ -406,8 +408,12 @@ export function testRotations(report) {
 
 	report.logAnimation(aniFrames);
 
+	report.endSection("single");
+	
 	//
 
+	report.startSection("stacked", "Stacked Rotations");
+	
 	aniFrames.length = 0;
 
 	reset();
@@ -515,4 +521,6 @@ export function testRotations(report) {
 	renderFrame("After rotation over combined reset axis");
 	
 	report.logAnimation(aniFrames);
+	
+	report.endSection("stacked");
 }
