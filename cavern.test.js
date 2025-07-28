@@ -664,17 +664,65 @@ class Folding extends NetChange {
 
 class Laying extends NetChange {
 
-    constructor(animationStep, id, halfFace, halfEdgeInHalfFace, plane, locationOfSourceVertexInPlane, directionOfHalfEdgeInPlane) {
+    constructor(animationStep, id, 
+                halfEdge, 
+                targetPositionV3,
+                targetOrientationQ) {
         super(animationStep, id, primitives);
-        this.__halfFace = halfFace;
-        this.__halfEdgeInHalfFace = halfEdgeInHalfFace;
-        this.__plane = plane;
+        
+        const net = animationStep.net;
+
+        const he1 = halfEdgeInHalfFace;
+        const he2 = he1.nextHalfEdge;
+        const he3 = he2.nextHalfEdge;
+        
+        const netVertex1 = net._getOrCreateNetVertex(he1);
+        const netVertex2 = net._getOrCreateNetVertex(he2);
+        const netVertex3 = net._getOrCreateNetVertex(he3);
+
+        this.__targetPositionV3 = targetPositionV3;
+        this.__targetOrientationQ = targetOrientationQ;
+        
         this.__fromState = null;
+        this.__sourcePositionV3 = null;
+        this.__sourceOrientationQ = null;
     }
 
     __compile(fromState, toState) {
         this.__fromState = fromState;
+
+        const pos1 = fromState._getNetVertexPosition(this._netVertex1);
+        const pos2 = fromState._getNetVertexPosition(this._netVertex2);
+        const pos3 = fromState._getNetVertexPosition(this._netVertex3);
         
+        this.__sourcePositionV3 = pos1;
+
+        const vec12 = subtractV3(pos2, pos1);
+        const vec13 = subtractV3(pos3, pos1);
+
+        const axisA = normalizeV3(vec13);
+        const axisB = normalizeV3(crossV3(vec12, vec13));
+        const axisC = normalizeV3(crossV3(axisA, axisB));
+
+        const sourceOrientationMatrix = 
+            rotationMatrixFromVectors(axisA, axisB, axisC);
+
+        const sourceOrientationQ = 
+              quaternionForRotationMatrix(sourceOrientationMatrix);
+        this.__sourceOrientationQ = sourceOrientationQ;
+
+        const targetOrientationQ = this.__targetOrientationQ;        
+        
+        const rotationQ = 
+            multiplyQuaternions(
+                targetOrientationQ,
+                conjugateQuaternion(sourceOrientationQ);
+
+        this.__rotationQ = rotationQ;
+
+        // TODO: make rotation matrix
+        // TODO: make affine matrix
+        // TODO: apply affine matrix
     }
 }
 

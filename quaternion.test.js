@@ -1,6 +1,6 @@
 import {
 	strM3,
-	scaleV3, normalizeV3, multM3, multM3V3,
+	scaleV3, normalizeV3, multM3, multM3V3, identityM3,
 } from "./linalg.js";
 
 import {
@@ -13,6 +13,8 @@ import {
 	rotationQuaternionForAxisAngle, 
 	rotationMatrixForQuaternion,
 	rotateVectorByQuaternion,
+	_gen__quaternionForRotationMatrix,
+	quaternionForRotationMatrix,
 } from "./quaternion.js";
 
 import * as THREE from "./three.module.js";
@@ -35,12 +37,22 @@ export function test(report) {
     report.startSection("conj", "Quaternion Conjugation", "f39dbaf93cc575cd28018dc0c830ec4c3fe55808aa674280325101f8c625e4db");
     testConj(report);
     report.endSection("conj");
+
+	report.startSection("qfrm", "Quaternion for Rotation Matrix");
+
+	//report.startSection("code", "Generated Code");
+	//_gen__quaternionForRotationMatrix(report.outputLine, "", "    ");
+	//report.endSection("code");
+	
+	testQFRM(report);
     
+	report.endSection("qfrm");
+	
     report.startSection("rotations", "Quaternions for Rotations", "");
     testRotations(report);
     report.endSection("rotations");
     
-	report.expandPath("/rotations");
+	report.expandPath("/qfrm/code");
 }
 
 export function testAdd(report) {
@@ -96,6 +108,28 @@ export function testConj(report) {
 	const sT = qT.clone().conjugate();
 
 	outputLine(`conj${quaternionToString(q)} = ${quaternionToString(s)} (${sT.toArray()})`);
+}
+
+export function testQFRM(report) {
+	const outputLine = report.outputLine;
+    const prefix = "";
+	
+	const m = identityM3();
+	const s = quaternionForRotationMatrix(m);
+
+	outputLine(`qfrm${strM3(m)} = ${quaternionToString(s)}`);
+
+	const axis = normalizeV3([.3, .1, 5]);
+	const angle = Math.PI/5;
+	
+	const q = rotationQuaternionForAxisAngle(axis, angle);
+	
+	const n = rotationMatrixForQuaternion(q);
+	
+	const t = quaternionForRotationMatrix(n);
+
+	outputLine(`qfrm[...n] = ${quaternionToString(t)}`);
+	outputLine(`          ?= ${quaternionToString(q)}`);
 }
 
 export function testRotations(report) {
@@ -523,4 +557,5 @@ export function testRotations(report) {
 	report.logAnimation(aniFrames);
 	
 	report.endSection("stacked");
+
 }
