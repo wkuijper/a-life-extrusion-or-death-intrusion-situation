@@ -563,3 +563,7 @@ export function normalizeV4(v) {
 export function crossV3([a1, a2, a3], [b1, b2, b3]) {
        return [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1];
 }
+
+export function compose3V3([a1, a2, a3], [b1, b2, b3], [c1, c2, c3]) {
+       return [a1, b1, c1, a2, b2, c2, a3, b3, c3];
+}

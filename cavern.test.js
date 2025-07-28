@@ -666,8 +666,8 @@ class Laying extends NetChange {
 
     constructor(animationStep, id, 
                 halfEdge, 
-                targetPositionV3,
-                targetOrientationQ) {
+                targetPositionVector,
+                targetOrientationQuaternion) {
         super(animationStep, id, primitives);
         
         const net = animationStep.net;
@@ -680,12 +680,12 @@ class Laying extends NetChange {
         const netVertex2 = net._getOrCreateNetVertex(he2);
         const netVertex3 = net._getOrCreateNetVertex(he3);
 
-        this.__targetPositionV3 = targetPositionV3;
-        this.__targetOrientationQ = targetOrientationQ;
+        this.__targetPositionVector = targetPositionVector;
+        this.__targetOrientationQuaternion = targetOrientationQuaternion;
         
         this.__fromState = null;
-        this.__sourcePositionV3 = null;
-        this.__sourceOrientationQ = null;
+        this.__sourcePositionVector = null;
+        this.__sourceOrientationQuaternion = null;
     }
 
     __compile(fromState, toState) {
@@ -694,9 +694,12 @@ class Laying extends NetChange {
         const pos1 = fromState._getNetVertexPosition(this._netVertex1);
         const pos2 = fromState._getNetVertexPosition(this._netVertex2);
         const pos3 = fromState._getNetVertexPosition(this._netVertex3);
-        
-        this.__sourcePositionV3 = pos1;
 
+        const targetPositionVector = this.__targetPositionVector;
+        
+        const sourcePositionVector = pos1;
+        this.__sourcePositionVector = sourcePositionVector;
+        
         const vec12 = subtractV3(pos2, pos1);
         const vec13 = subtractV3(pos3, pos1);
 
@@ -705,24 +708,79 @@ class Laying extends NetChange {
         const axisC = normalizeV3(crossV3(axisA, axisB));
 
         const sourceOrientationMatrix = 
-            rotationMatrixFromVectors(axisA, axisB, axisC);
+            compose3V3(axisA, axisB, axisC);
 
-        const sourceOrientationQ = 
+        const sourceOrientationQuaternion = 
               quaternionForRotationMatrix(sourceOrientationMatrix);
-        this.__sourceOrientationQ = sourceOrientationQ;
-
-        const targetOrientationQ = this.__targetOrientationQ;        
         
-        const rotationQ = 
+        this.__sourceOrientationQuaternion = sourceOrientationQuaternion;
+        const targetOrientationQuaternion = this.__targetOrientationQuaternion;        
+        
+        const rotationQuaternion = 
             multiplyQuaternions(
-                targetOrientationQ,
-                conjugateQuaternion(sourceOrientationQ);
+                targetOrientationQuaternion,
+                conjugateQuaternion(sourceOrientationQuaternion)
+            );
 
-        this.__rotationQ = rotationQ;
+        this.__rotationQuaternion = rotationQuaternion;
 
-        // TODO: make rotation matrix
-        // TODO: make affine matrix
-        // TODO: apply affine matrix
+        const [rotationAxis, rotationAngle]  = 
+            axisAngleForRotationQuaternion(rotationQuaternion);
+
+        this.__rotationAxis = rotationAxis;
+        this.__rotationAngle = rotationAngle;
+
+        const rotationMatrix =
+            rotationMatrixForQuaternion(rotationQuaternion);
+
+        const affineRotationPostTranslationMatrix = 
+            composeAffineM3V3(rotationMatrix, targetPositionVector);
+
+        const affinePreTranslationMatrix = 
+            composeAffineM3V3(identityM3(), negV3(sourcePositionVector));
+
+        // TODO: determine if we need premultiply instead here:
+        const transformationMatrix = 
+            multM4(affinePreTranslationMatrix, affineRotationPostTranslationMatrix);
+        
+        for (const netVertex of this.netVertices()) {
+            const sourcePosition = fromState._getNetVertexPosition(netVertex);
+            const targetPosition = applyM4V3(transformationMatrix, sourcePosition);
+            targetState._setNetVertexPosition(netVertex, targetPosition);
+        }
+    }
+
+    __interpolate(stepTime, progressRatio, betweenState) {
+        const targetPositionVector = this.__targetPositionVector;
+        const sourcePositionVector = this.__sourcePositionVector;
+        
+        const [rotationAxis, rotationAngle]  = 
+            axisAngleForRotationQuaternion(rotationQuaternion);
+
+        const rotationAxis = this.__rotationAxis;
+        const rotationAngle = progressRatio * this.__rotationAngle;
+        
+        const rotationQuaternion =
+            rotationQuaternionForAxisAngle(rotationAxis, rotationAngle);
+
+        const rotationMatrix =
+            rotationMatrixForQuaternion(rotationQuaternion);
+
+        const affineRotationPostTranslationMatrix = 
+            composeAffineM3V3(rotationMatrix, targetPositionVector);
+
+        const affinePreTranslationMatrix = 
+            composeAffineM3V3(identityM3(), negV3(sourcePositionVector));
+
+        // TODO: determine if we need premultiply instead here:
+        const transformationMatrix = 
+            multM4(affinePreTranslationMatrix, affineRotationPostTranslationMatrix);
+        
+        for (const netVertex of this.netVertices()) {
+            const sourcePosition = fromState._getNetVertexPosition(netVertex);
+            const targetPosition = applyM4V3(transformationMatrix, sourcePosition);
+            betweenState._setNetVertexPosition(netVertex, targetPosition);
+        }
     }
 }
 

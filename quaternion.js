@@ -52,6 +52,10 @@ export function rotationQuaternionForAxisAngle(axis, angle) {
        const axisScaledBySinHalfAngle = scaleV3(sinHalfAngle, axis);
        return [...axisScaledBySinHalfAngle, cosHalfAngle];
 }
+
+export function axisAngleForRotationQuaternion([i, j, k, r]) {
+       return [normalizeV3([i, j, k]), 2 * Math.acos(r)];
+}
        
 export function rotationMatrixForQuaternion([i, j, k, r]) {
        const ii = i * i; const jj = j * j; const kk = k * k;
@@ -62,62 +66,8 @@ export function rotationMatrixForQuaternion([i, j, k, r]) {
               2 * (ij + kr), 1 - 2 * (ii + kk), 2 * (jk - ir),
               2 * (ik - jr), 2 * (jk + ir), 1 - 2 * (ii + jj), 
        ];
-       
        const [a1, b1, c1, a2, b2, c2, a3, b3, c3] = m;
-
-       console.log("(A2) b1 = 2 * (ij - kr): ", b1, 2 * (i * j - k * r));
-       console.log("(A4) a2 = 2 * (ij + kr): ", a2,  2 * (i * j + k * r));
-       console.log("     4kr = a2 - b1: ", 4 * k * r, a2 - b1);
-       console.log("(F1) k = (a2 - b1) / 4r: ", k, (a2 - b1) / (4 * r));
-       console.log("(F2) j = (a3 - c1) / 4r: ", j, (c1 - a3) / (4 * r));
-       console.log("(F3) i = (b3 - c2) / 4r : ", i, (b3 - c2) / (4 * r));
-
-       console.log("(...) b1 = 2*( ((b3 - c2) / 4r) * ((c1 - a3) / 4r) - ((a2 - b1) / 4r) * r)",
-                   b1, 2*( ((b3 - c2) / (4*r)) * ((c1 - a3) / (4*r)) - ((a2 - b1) / (4*r)) * r));
-       console.log("      ((a2 - b1) / (4*r)) * r = (a2 - b1)/4", ((a2 - b1) / (4*r)) * r, (a2 - b1)/4);
-       console.log("      ((b3 - c2) / (4*r)) * ((c1 - a3) / (4*r)) = ((b3 - c2)*(c1 - a3))/(16*r^2)",
-                   ((b3 - c2) / (4*r)) * ((c1 - a3) / (4*r)), ((b3 - c2)*(c1 - a3))/(16 * r * r))
-       console.log("(...) b1 = 2*(((b3 - c2)*(c1 - a3))/16r^2 - (a2 - b1)/4)",
-                  b1, 2*(((b3 - c2)*(c1 - a3))/(16*r*r) - (a2 - b1)/4));
-       console.log("(...) b1 = (b3 - c2)*(c1 - a3)/8r^2 - (a2 - b1)/2", 
-                  b1, (b3 - c2)*(c1 - a3)/(8 * r * r) - (a2 - b1)/2);
-       console.log("(...) (b1+a2)/2 = (b3 - c2)*(c1 - a3)/4r^2: ", 
-                   (b1+a2)/2, (b3 - c2)*(c1 - a3)/(4 * r * r));
-       console.log("(...) b1+a2 = (b3 - c2)*(c1 - a3)/(4*r^2): ", 
-                   b1+a2, (b3 - c2)*(c1 - a3)/(4*r*r));
-       console.log("(...) r = sqrt((b3 - c2)*(c1 - a3)/4(b1+a2)): ", 
-                   r, Math.sqrt(((b3 - c2)*(c1 - a3))/(4*(b1+a2))));
-
-       console.log("(alt) a2 = 2*( ((b3 - c2) / 4r) * ((c1 - a3) / 4r) + ((a2 - b1) / 4r) * r)",
-                  a2, 2*( ((b3 - c2) / (4 * r)) * ((c1 - a3) / (4 * r)) + ((a2 - b1) / (4 * r)) * r));
-       console.log("(alt) a2 = 2*((b3 - c2)*(c1 - a3)/16r^2 + (a2 - b1)/4)",
-                   a2, 2*((b3 - c2)*(c1 - a3)/(16 * r * r) + (a2 - b1)/4));
-       console.log("(alt) a2 = (b3 - c2)*(c1 - a3)/8r^2 + (a2 - b1)/2",
-                  a2, (b3 - c2)*(c1 - a3)/(8 * r * r) + (a2 - b1)/2);
-       console.log("(alt) (a2+b1)/2 = (b3 - c2)*(c1 - a3)/8r^2",
-                  (a2+b1)/2, (b3 - c2)*(c1 - a3)/(8*r*r))
-       console.log("(alt) a2+b1 = (b3 - c2)*(c1 - a3)/4r^2", 
-                  a2+b1, (b3 - c2)*(c1 - a3)/(4 * r * r))
-       console.log("(alt) r = sqrt(((b3 - c2)*(c1 - a3))/4(a2+b1)): ", 
-                   r, Math.sqrt(((b3 - c2)*(c1 - a3))/(4 * (a2+b1))));
-
-       console.log("(iii) c1 = 2 * (((b3 - c2) / 4r) * ((a2 - b1) / 4r) + ((c1 - a3) / 4r) * r)",
-                   c1, 2 * (((b3 - c2) / (4 * r)) * ((a2 - b1) / (4 * r)) + ((c1 - a3) / (4 * r)) * r))
-       console.log(((b3 - c2) * (a2 - b1))/(4*(c1 + a3)));
-       console.log("(iii) r = sqrt(((b3 - c2) * (a2 - b1))/4(c1 + a3))",
-                  r, Math.sqrt(((b3 - c2) * (a2 - b1))/(4*(c1 + a3))))
-
-       console.log("(iv) r = sqrt(((b3 - c2) * (a2 - b1))/4(b3 + c2))",
-                  r, Math.sqrt(((b3 - c2) * (a2 - b1))/(4 * (b3 + c2))));
-
-       console.log("(v) k = sqrt(((c1 + a3) * (b3 + c2))/4(a2 + b1))",
-                   k, Math.sqrt(((c1 + a3) * (b3 + c2))/(4 * (a2 + b1))));
-       
        return m;
-}
-
-export function affineRotationMatrixForQuaternion([i, j, k, r]) {
-       // TODO
 }
 
 export function rotateVectorByQuaternion([x, y, z], [i, j, k, r]) {
