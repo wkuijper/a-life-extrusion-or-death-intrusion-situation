@@ -37,10 +37,326 @@ export function conjugateQuaternion([i, j, k, r]) {
        return [-i, -j, -k, r];
 }
 
+export function normalizeQuaternion(q) {
+       return normalizeV4(q);
+}
+
 export function identityQuaternion() {
        return [0, 0, 0, 1];
 }
+   
+export function halfQuaternion(q) {
+       return normalizeQuaternion(addQuaternions(q, identityQuaternion()));
+}
+
+export function slowQuaternionSlerp(q, bits, divident) {
+       const divisor = 1 << bits;
+       if (divident >= divisor) {
+              return q;
+       }
+       let qq = identityQuaternion();
+       if (divident <= 0) {
+              return qq;
+       }
+       bit = divisor >> 1;
+       while (bit > 0) {
+              qh = halfQuaternion(q);
+              if (normSqV4(diffV4(qh, q)) < 1e-25) {
+                     break;
+              }
+              q = qh;
+              if ((divident & bit) !== 0) {
+                     qq = multiplyQuaternions(q, qq);
+                     qq = normalizeQuaternion(qq);
+              }
+              bit = bit >> 1;
+       }
+       return qq;
+}
+
+/**
+ * Fast, numerically stable, incremental spherical interpolation for
+ * quaternions that does not rely on trigonometric functions.
+ *
+ * Interpolants can be computed between a given rotation-quaternion
+ * and the identity-quaternion, i.e.: from no rotation to full rotation
+ * or vice versa.
+ *
+ * By doing this for the difference between two arbitrary rotation-
+ * quaternions (and subsequently composing the result) we can achieve 
+ * interpolation between arbitrary rotation quaternions.
+ *
+ * Works best for monotonically increasing/decreasing sequences of 
+ * interpolation ratios which allows for the most incremental computation.
+ * But the class can be used for arbitrary interpolation as well. 
+ * 
+ * In the worst case it uses a number of quaternion multiplications 
+ * equal to half the number of bits, that is: logarithmic in the desired 
+ * resolution.
+ *
+ * The latter also bounds the cumulative error. In general, the interpolants
+ * are tied, as much as possible, to the pre-computed, normalized fractions
+ * of the original quaternion.
+ * 
+ * Normalization of the intermediate results is off by default and must be
+ * explicitly requested to get the most accurate results. Note that the 
+ * end-result is always normalized by default and for most cases that should 
+ * be adequate.
+ *
+ * If the requested resolution is too big (fractions end up too
+ * close together) the number of requested bits is automatically cut off.
+ * Note that this happens very easily in degenerate cases like an empty
+ * rotation or in edge-cases where the rotation is close to empty.
+ */
+class FastQuaternionSlerper {
+
+       constructor(rotationQuaternion, bits, normalizeIntermediate) {
+              if (normalizeIntermediate === undefined) {
+                     normalizeIntermediate = false;
+              }
+              const fullQuaternion = copyQuaternion(rotationQuaternion);
+              const divisor = 1 << bits;
+              const bitsPlusOne = bits + 1;
+              let quaternionPosFractions = new Array(bitsPlusOne);
+              let quaternionNegFractions = new Array(bitsPlusOne);
+              let q = copyQuaternion(fullQuaternion);
+              let unsafeBits = 0;
+              q = fullQuaternion;
+              quaternionPosFractions[bits] = q;
+              quaternionNegFractions[bits] = conjugateQuaternion(q)
+              for (i = this.__bits-1; i >= 0; i--) {
+                     qh = halfQuaternion(q); // <-- inherently normalized
+                     if (normSqV4(diffV4(qh, q)) < 1e-25) {
+                            unsafeBits = i;
+                            break;
+                     }
+                     q = qh;
+                     quaternionPosFractions[i] = q;
+                     quaternionNegFractions[i] = conjugateQuaternion(q);
+              }
+              const safeBits = bits - unsafeBits;
+              if (unsafeBits > 0) {
+                     for (let i = 0; i < safeBits; i++) {
+                           quaternionPosFractions[i] =
+                                  quaternionPosFractions[i + unsafeBits];
+                           quaternionNegFractions[i] = 
+                                  quaternionNegFractions[i + unsafeBits];     
+                     }
+                     quaternionPosFractions.length = safeBits;
+                     quaternionNegFractions.length = safeBits;
+              }
+              this.__bits = safeBits;
+              this.__divisor = 1 << safeBits;
+              this.__fullQuaternion = fullQuaternion;
+              this.__quaternionPosFractions = quaternionPosFractions;
+              this.__quaternionNegFractions = quaternionNegFractions;
+              this.__normalizeIntermediate = normalizeIntermediate;
+              this.__cachedQuaternion = quaternion;
+              this.__cachedDivident = divisor;
+              this.__cachedDirection = -1;
+       }
+
+       slerp(progressRatio, normalizeIntermediate) {
+              if (normalizeIntermediate === undefined) {
+                     normalizeIntermediate = false;
+              }
+              const divisor = this.__divisor;
+              const divident = Math.round(progressRatio * divisor);
+              return this.__slerpDivident(divident, normalizeIntermediate);
+       }
+
+       __slerpDivident(divident, normalizeIntermediate) {
+              if (normalizeIntermediate === undefined) {
+                     normalizeIntermediate = false;
+              }
+              const cachedDirection = this.__cachedDirection;
+              const cachedDivident = this.__cachedDivident;
+              if (divident === cachedDivident) {
+                    return copyQuaternion(this.__cachedQuaternion); 
+              } 
+              if (cachedDirection === 0) {
+                     this.__cachedDirection = 
+                            (divident > cachedDivident) ? +1 : -1;
+                     return this.__incrementalSlerp(divident, normalizeIntermediate);
+              } else if (cachedDirection < 0 && progressRatio < cachedProgressRatio) {
+                     return this.__incrementalSlerp(divident, normalizeIntermediate);
+              } else if (cachedDirection > 0 && progressRatio > cachedProgressRatio) {
+                     return this.__incrementalSlerp(divident, normalizeIntermediate);
+              } else {
+                     return this.__slerp(divident, normalizeIntermediate);
+              }
+       }
+
+       __incrementalSlerp(targetDivident, normalizeIntermediate) {
+              const cachedDivident = this.__cachedDivident;
+              const divisor = this.__divisor;
+              let bit = divisor;
+              if ((bit & targetDivident) !== 0) {
+                     this.__cachedQuaternion = this.__fullQuaternion;
+                     this.__cachedDivident = this.__divisor;
+                     this.__cachedDirection = -1;
+                     return copyQuaternion(this.__fullQuaternion);
+              }
+              bit = bit >> 1;
+              let incrementalMultiplicationCount = 0;
+              let fromAboveMultiplicationCount = 1; // 1 extra for lowest bit
+              let fromBelowMultiplicationCount = 0;
+              let highestBitIndex = -1;
+              let lowestBitIndex = this.__bits;
+              for (i = this.__bits-1; i >= 0; i--) {
+                     if ((bit & targetDivident) !== 0) {
+                            if ((bit & cachedDivident) === 0) {
+                                   incrementalMultiplicationCount++;
+                            }
+                            if (highestBitIndex === -1) {
+                                   highestBitIndex = i;
+                            } else {
+                                   fromBelowMultiplicationCount++;
+                            }
+                            lowestBitIndex = i;
+                     } else {
+                            if ((bit & cachedDivident) !== 0) {
+                                   incrementalMultiplicationCount++;
+                            }
+                            if (highestBitIndex >= 0) {
+                                   fromAboveMultiplicationCount++;
+                            }
+                     }
+                     bit = bit >> 1;
+              }
+              if (highestSetTargetBitIndex < 0) {
+                     this.__cachedQuaternion = identityQuaternion();
+                     this.__cachedDivident = 0;
+                     this.__cachedDirection = +1;
+                     return identityQuaternion(); 
+              }
+              if (fromBelowMultiplicationCount <= incrementalMultiplicationCount
+                        && fromBelowMultiplicationCount <= fromAboveMultiplicationCount) {
+                     return this.__slerpFromBelow(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate);
+              } 
+              if (fromAboveMultiplicationCount <= incrementalMultiplicationCount) {
+                     return this.__slerpFromAbove(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate);
+              } 
+              const posFractions = this.__quaternionPosFractions;
+              const negFractions = this.__quaternionNegFractions;
+              bit = 1 << lowestBitIndex;
+              let q = this.__cachedQuaternion;
+              for (let i = lowestBitIndex; i++; i <= highestBitIndex) {
+                     if ((bit & targetDivident) !== 0) {
+                            if ((bit & cachedDivident) === 0) {
+                                   q = multiplyQuaternions(q, posFractions[i]);
+                                   if (normalizeIntermediate) {
+                                          q = normalizeQuaternion(q);
+                                   }
+                            }
+                     } else {
+                            if ((bit & cachedDivident) !== 0) {
+                                   q = multiplyQuaternions(q, negFractions[i]);
+                                   if (normalizeIntermediate) {
+                                          q = normalizeQuaternion(q);
+                                   }
+                            }
+                     }
+              }
+              q = normalizeQuaternion(q);
+              this.__cachedQuaternion = q;
+              this.__cachedDivident = divident;
+              this.__cachedDirection = 0;
+              return copyQuaternion(q);
+       }
+
+       __slerp(targetDivident, normalizeIntermediate) {
+              const divisor = this.__divisor;
+              let bit = divisor;
+              if ((bit & targetDivident) !== 0) {
+                     this.__cachedQuaternion = this.__fullQuaternion;
+                     this.__cachedDivident = this.__divisor;
+                     this.__cachedDirection = -1;
+                     return copyQuaternion(this.__fullQuaternion);
+              }
+              bit = bit >> 1;
+              let fromAboveMultiplicationCount = 1; // 1 extra for lowest bit
+              let fromBelowMultiplicationCount = 0;
+              let highestBitIndex = -1;
+              let lowestBitIndex = this.__bits;
+              for (i = this.__bits-1; i >= 0; i--) {
+                     if ((bit & targetDivident) !== 0) {
+                            if (highestBitIndex === -1) {
+                                   highestBitIndex = i;
+                            } else {
+                                   fromBelowMultiplicationCount++;
+                            }
+                            lowestBitIndex = i;
+                     } else {
+                            if (highestBitIndex >= 0) {
+                                   fromAboveMultiplicationCount++;
+                            }
+                     }
+                     bit = bit >> 1;
+              }
+              if (highestSetTargetBitIndex < 0) {
+                     this.__cachedQuaternion = identityQuaternion();
+                     this.__cachedDivident = 0;
+                     this.__cachedDirection = +1;
+                     return identityQuaternion(); 
+              }
+              if (fromBelowMultiplicationCount <= fromAboveMultiplicationCount) {
+                     return this.__slerpFromBelow(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate);
+              }  else {
+                     return this.__slerpFromAbove(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate); 
+              }
+       }
        
+       __slerpFromBelow(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate) {
+              const posFractions = this.__quaternionPosFractions;
+              let q = posFractions[lowestBitIndex];
+              let bit = 1 << lowestBitIndex;
+              for (i = lowestBitIndex+1; i <= highestBitIndex; i++) {
+                     bit = bit << 1;
+                     if ((divident & bit) !== 0) {
+                            q = multiplyQuaternions(q, posFractions[i]);
+                            if (normalizeIntermediate) {
+                                   q = normalizeQuaternion(q);
+                            }
+                     }
+              }
+              q = normalizeQuaternion(q);
+              this.__cachedQuaternion = q;
+              this.__cachedDivident = divident;
+              this.__cachedDirection = 0;
+              return copyQuaternion(q);
+       }
+       
+       __slerpFromAbove(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate) {
+              const posFractions = this.__quaternionPosFractions;
+              let q = posFractions[highestBitIndex+1];
+              const negFractions = this.__quaternionNegFractions;
+              let bit = 1 << highestBitIndex;
+              for (i = highestBitIndex-1; i >= 0; i--) {
+                     bit = bit >> 1;
+                     if ((divident & bit) === 0) {
+                            q = multiplyQuaternions(q, negFractions[i]);
+                            if (normalizeIntermediate) {
+                                   q = normalizeQuaternion(q);
+                            }
+                     }
+              }
+              // subtracting the lowest bit from a power-of-two
+              // gets us to a string of all 1-bits
+              // which is what we would have started from 
+              // since we're subtracting
+              // all the powers of the zero-bits.
+              // conceptually it would be clearer if we'd do this first
+              // but numerically it's better to do it last:
+              q = multiplyQuaternions(q, negFractions[0]);
+              q = normalizeQuaternion(q);
+              this.__cachedQuaternion = q;
+              this.__cachedDivident = divident;
+              this.__cachedDirection = 0;
+              return copyQuaternion(q);
+       }
+}
+
 export function pureQuaternionForVector([i, j, k]) {
        return [i, j, k, 0];
 }
