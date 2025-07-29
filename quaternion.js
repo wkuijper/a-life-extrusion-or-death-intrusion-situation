@@ -78,17 +78,18 @@ export function slowQuaternionSlerp(q, bits, divident) {
  * Fast, numerically stable, incremental spherical interpolation for
  * quaternions that does not rely on trigonometric functions.
  *
- * Interpolants can be computed between a given rotation-quaternion
- * and the identity-quaternion, i.e.: from no rotation to full rotation
- * or vice versa.
+ * Interpolants can be computed between a set rotation-quaternion
+ * and the identity-quaternion, i.e.: from no-rotation to full-rotation
+ * or vice-versa.
  *
  * By doing this for the difference between two arbitrary rotation-
  * quaternions (and subsequently composing the result) we can achieve 
  * interpolation between arbitrary rotation quaternions.
  *
  * Works best for monotonically increasing/decreasing sequences of 
- * interpolation ratios which allows for the most incremental computation.
- * But the class can be used for arbitrary interpolation as well. 
+ * interpolation ratios because these allow for the most incremental 
+ * computation. But the class can be used for arbitrary interpolation 
+ * as well. 
  * 
  * In the worst case it uses a number of quaternion multiplications 
  * equal to half the number of bits, that is: logarithmic in the desired 
@@ -98,10 +99,13 @@ export function slowQuaternionSlerp(q, bits, divident) {
  * are tied, as much as possible, to the pre-computed, normalized fractions
  * of the original quaternion.
  * 
- * Normalization of the intermediate results is off by default and must be
- * explicitly requested to get the most accurate results. Note that the 
- * end-result is always normalized by default and for most cases that should 
- * be adequate.
+ * Normalization of the intermediate results does not happen by default and 
+ * must be explicitly requested through the constructor to get the most 
+ * accurate results. 
+ *
+ * Note that the end-result of each interpolation is always normalized by 
+ * default, even when intermediate normalization is off, for most cases that 
+ * should be adequate.
  *
  * If the requested resolution is too big (fractions end up too
  * close together) the number of requested bits is automatically cut off.
@@ -110,21 +114,39 @@ export function slowQuaternionSlerp(q, bits, divident) {
  */
 class FastQuaternionSlerper {
 
-       constructor(rotationQuaternion, bits, normalizeIntermediate) {
+       constructor(maxBits, normalizeIntermediate) {
               if (normalizeIntermediate === undefined) {
                      normalizeIntermediate = false;
               }
+              this.__maxBits = maxBits;
+              this.__normalizeIntermediate = normalizeIntermediate;
+              
+              this.__quaternionPosFractions = new Array(maxBits+1);
+              this.__quaternionNegFractions = new Array(maxBits+1);
+              
+              const identityQuaternion = identityQuaternion();
+              
+              this.__quaternionPosFractions[0] = identityQuaternion;
+              this.__quaternionNegFractions[0] = identityQuaternion;
+              
+              this.__fullQuaternion = identityQuaternion;
+              this.__bits = 0;
+              this.__divisor = 1;
+              
+              this.__cachedQuaternion = identityQuaternion;
+              this.__cachedDivident = 0;
+              this.__cachedDirection = 0;
+       }
+
+       set(rotationQuaternion) {
               const fullQuaternion = copyQuaternion(rotationQuaternion);
-              const divisor = 1 << bits;
-              const bitsPlusOne = bits + 1;
-              let quaternionPosFractions = new Array(bitsPlusOne);
-              let quaternionNegFractions = new Array(bitsPlusOne);
-              let q = copyQuaternion(fullQuaternion);
+              const maxBits = this.__maxBits;
+              const divisor = 1 << maxBits;
+              let q = fullQuaternion;
               let unsafeBits = 0;
-              q = fullQuaternion;
-              quaternionPosFractions[bits] = q;
-              quaternionNegFractions[bits] = conjugateQuaternion(q)
-              for (i = this.__bits-1; i >= 0; i--) {
+              quaternionPosFractions[maxBits] = q;
+              quaternionNegFractions[maxBits] = conjugateQuaternion(q)
+              for (i = maxBits-1; i >= 0; i--) {
                      qh = halfQuaternion(q); // <-- inherently normalized
                      if (normSqV4(diffV4(qh, q)) < 1e-25) {
                             unsafeBits = i;
@@ -134,7 +156,7 @@ class FastQuaternionSlerper {
                      quaternionPosFractions[i] = q;
                      quaternionNegFractions[i] = conjugateQuaternion(q);
               }
-              const safeBits = bits - unsafeBits;
+              const safeBits = maxBits - unsafeBits;
               if (unsafeBits > 0) {
                      for (let i = 0; i < safeBits; i++) {
                            quaternionPosFractions[i] =
@@ -142,33 +164,23 @@ class FastQuaternionSlerper {
                            quaternionNegFractions[i] = 
                                   quaternionNegFractions[i + unsafeBits];     
                      }
-                     quaternionPosFractions.length = safeBits;
-                     quaternionNegFractions.length = safeBits;
               }
               this.__bits = safeBits;
               this.__divisor = 1 << safeBits;
               this.__fullQuaternion = fullQuaternion;
-              this.__quaternionPosFractions = quaternionPosFractions;
-              this.__quaternionNegFractions = quaternionNegFractions;
-              this.__normalizeIntermediate = normalizeIntermediate;
-              this.__cachedQuaternion = quaternion;
-              this.__cachedDivident = divisor;
-              this.__cachedDirection = -1;
+              
+              this.__cachedQuaternion = identityQuaternion();
+              this.__cachedDivident = 0;
+              this.__cachedDirection = 0;
        }
-
-       slerp(progressRatio, normalizeIntermediate) {
-              if (normalizeIntermediate === undefined) {
-                     normalizeIntermediate = false;
-              }
+       
+       slerp(progressRatio) {
               const divisor = this.__divisor;
               const divident = Math.round(progressRatio * divisor);
-              return this.__slerpDivident(divident, normalizeIntermediate);
+              return this.__slerpDivident(divident);
        }
 
-       __slerpDivident(divident, normalizeIntermediate) {
-              if (normalizeIntermediate === undefined) {
-                     normalizeIntermediate = false;
-              }
+       __slerpDivident(divident) {
               const cachedDirection = this.__cachedDirection;
               const cachedDivident = this.__cachedDivident;
               if (divident === cachedDivident) {
@@ -177,17 +189,17 @@ class FastQuaternionSlerper {
               if (cachedDirection === 0) {
                      this.__cachedDirection = 
                             (divident > cachedDivident) ? +1 : -1;
-                     return this.__incrementalSlerp(divident, normalizeIntermediate);
+                     return this.__incrementalSlerp(divident);
               } else if (cachedDirection < 0 && progressRatio < cachedProgressRatio) {
-                     return this.__incrementalSlerp(divident, normalizeIntermediate);
+                     return this.__incrementalSlerp(divident);
               } else if (cachedDirection > 0 && progressRatio > cachedProgressRatio) {
-                     return this.__incrementalSlerp(divident, normalizeIntermediate);
+                     return this.__incrementalSlerp(divident);
               } else {
-                     return this.__slerp(divident, normalizeIntermediate);
+                     return this.__slerp(divident);
               }
        }
 
-       __incrementalSlerp(targetDivident, normalizeIntermediate) {
+       __incrementalSlerp(targetDivident) {
               const cachedDivident = this.__cachedDivident;
               const divisor = this.__divisor;
               let bit = divisor;
@@ -232,11 +244,12 @@ class FastQuaternionSlerper {
               }
               if (fromBelowMultiplicationCount <= incrementalMultiplicationCount
                         && fromBelowMultiplicationCount <= fromAboveMultiplicationCount) {
-                     return this.__slerpFromBelow(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate);
+                     return this.__slerpFromBelow(divident, highestBitIndex, lowestBitIndex);
               } 
               if (fromAboveMultiplicationCount <= incrementalMultiplicationCount) {
-                     return this.__slerpFromAbove(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate);
-              } 
+                     return this.__slerpFromAbove(divident, highestBitIndex, lowestBitIndex);
+              }
+              const normalizeIntermediate = this.__normalizeIntermediate;
               const posFractions = this.__quaternionPosFractions;
               const negFractions = this.__quaternionNegFractions;
               bit = 1 << lowestBitIndex;
@@ -307,7 +320,8 @@ class FastQuaternionSlerper {
               }
        }
        
-       __slerpFromBelow(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate) {
+       __slerpFromBelow(divident, highestBitIndex, lowestBitIndex) {
+              const normalizeIntermediate = this.__normalizeIntermediate;
               const posFractions = this.__quaternionPosFractions;
               let q = posFractions[lowestBitIndex];
               let bit = 1 << lowestBitIndex;
@@ -327,7 +341,8 @@ class FastQuaternionSlerper {
               return copyQuaternion(q);
        }
        
-       __slerpFromAbove(divident, highestBitIndex, lowestBitIndex, normalizeIntermediate) {
+       __slerpFromAbove(divident, highestBitIndex, lowestBitIndex) {
+              const normalizeIntermediate = this.__normalizeIntermediate;
               const posFractions = this.__quaternionPosFractions;
               let q = posFractions[highestBitIndex+1];
               const negFractions = this.__quaternionNegFractions;
