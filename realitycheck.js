@@ -8,12 +8,12 @@ function _isRationalForSure(realExpr) {
         return true;
     }
     if (realExpr instanceof UnaryOperationExpr) {
-        ["-"].includes(realExpr.operatorStr);
+        //["-"].includes(realExpr.operatorStr);
         return 
             _isRationalForSure(realExpr.subExpr);
     }
     if (realExpr instanceof BinaryOperationExpr) {
-        ["+", "-", "*", "/"].includes(realExpr.operatorStr);
+        //["+", "-", "*", "/"].includes(realExpr.operatorStr);
         return 
             _isRationalForSure(realExpr.leftExpr)
             && _isRationalForSure(realExpr.rightExpr);
@@ -27,6 +27,22 @@ class RationalCanonizer {
     }
 
     canonize(realExpr) {
-            
+        if (realExpr instanceof NaturalNumberExpr) {
+            return realExpr;
+        }
+        if (realExpr.value.isPerfectForSure()) {
+            return realExpr.value.reifyToExpr();
+        }
+        if (realExpr instanceof UnaryOperationExpr) {
+            //["-"].includes(realExpr.operatorStr);
+            return 
+                _isRationalForSure(realExpr.subExpr);
+        }
+        if (realExpr instanceof BinaryOperationExpr) {
+            //["+", "-", "*", "/"].includes(realExpr.operatorStr);
+            return 
+                _isRationalForSure(realExpr.leftExpr)
+                && _isRationalForSure(realExpr.rightExpr);
+        }    
     }
 }
