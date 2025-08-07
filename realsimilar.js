@@ -1,16 +1,18 @@
 class FloatTree {
     
     constructor() {
-        const rootNode = new FloatTreeNode();
-        // default root reference,
-        // keeps root from being freed:
-        rootNode._incRefCount();
+        const rootNode = new FloatTreeNode(); // <-- refCount === 1
         this.__rootNode = rootNode;
         this.__firstFreeNode = null;
     }
 
     _freeNode(node) {
-        if (node._parent === null) {
+        
+        const parent = node._parent;
+        const isOneChild = 
+            ((node._flags & _NODE_FLAG__IS_ONE_CHILD) !== 0);
+
+        if (parent === null) {
             throw new Error(`invariant violation: root should always be referenced`);
         }
         if (node._zeroChild !== null) {
@@ -28,12 +30,24 @@ class FloatTree {
         if (node._negObj !== null) {
             throw new Error(`invariant violation: node is still occupied`);
         }
+        
         node._parent = null;
         node._lvl = 0;
-        node._refCount = 1;
+        node._flags = 0;
+
+        // put in free list
         if (this.__firstFreeNode !== null) {
             node._oneChild = this.__firstFreeNode;
             this.__firstFreeNode = node;
+        }
+
+        // potentially, recursively, free parent
+        if (isOneChild) {
+            parent._oneChild = null;
+            this._decRefCount(parent);
+        } else {
+            parent._zeroChild = null;
+            this._decRefCount(parent);
         }
     }
 
@@ -41,48 +55,42 @@ class FloatTree {
         if (this.__firstFreeNode !== null) {
             const newNode = this.__firstFreeNode;
             this.__firstFreeNode = newNode._oneChild;
+            this._incRefCount(newNode);
             return newNode;
         } else {
-            return new FloatTreeNode();
+            return new FloatTreeNode(); // <-- refCOunt === 1
         }
     }
     
     _incRefCount(node) {
-        let currNode = node;
-        do {
-            currNode._refCount++;
-            currNode = currNode._parent;
-        } while (currNode !== null);
+        currNode._refCount++;
     }
 
     _decRefCount(node) {
-        let currNode = node;
-        do {
-            if (currNode._refCount < 1) {
-                throw new Error(`invariant violation: reference count is corrupted`);
-            }            
-            currNode._refCount--;
-            const parentNode = currNode.parent;
-            if (currNode._refCount === 0) {
-                this._freeNode(currNode);
-            }
-            currNode = parentNode;
-        } while (currNode !== null);
+        if (node._refCount < 1) {
+            throw new Error(`invariant violation: reference count is corrupted`);
+        }            
+        node._refCount--;
+        if (node._refCount === 0) {
+            this._freeNode(node);
+        }
     }
 
     _occupyPos(node, posObj) {
         if (node._posObj !== null) {
             throw new Error(`invariant violation: node already occupied`);
         }
-        node._posObj = posObj;
-        this._incRefCount(node);
+        this._incRefCount(node); 
+        node._posObj = posObj; // posObj refers to node
+        this._setPosObjFlag(node);
     }
     
     _deoccupyPos(node) {
         if (node._posObj === null) {
             throw new Error(`invariant violation: node is not occupied`);
         }
-        node._posObj = null;
+        this._unsetPosObjFlag(node);
+        node._posObj = null; // posObj no longer refers to node
         this._decRefCount(node);
     }
     
@@ -90,74 +98,185 @@ class FloatTree {
         if (node._negObj !== null) {
             throw new Error(`invariant violation: node already occupied`);
         }
-        node._negObj = negObj;
         this._incRefCount(node);
+        node._negObj = negObj; // negObj refers to node
+        this._setNegObjFlag(node);
     }
     
     _deoccupyNeg(node) {
         if (node._negObj === null) {
             throw new Error(`invariant violation: node is not occupied`);
         }
-        node._negObj = null;
+        this._unsetNegObjFlag(node);
+        node._negObj = null; // negObj no longer refers to node
         this._decRefCount(node);
     }
-    
-    // methods below should only be called
-    // by handles (because the reference
-    // counts of returned node might be zero
-    // which necesitates the implicit reference
-    // of the handle)
 
+    _setPosObjFlag(node) {
+        let currNode = node;
+        do {
+            const flags = (currNode._flags | _NODE_FLAG__HAS_POS_OBJ);
+            currNode._flags = flags;
+            const parentNode = currNode.parent;
+            if (parentNode === null) {
+                break;
+            }
+            if ((flags & _NODE_FLAG__HAS_POS_OBJ) !== 0) {
+                return;
+            }
+            currNode = parentNode;
+        } while (true);
+    }
+
+    _unsetPosObjFlag(node) {
+        let currNode = node;
+        do {
+            const flags = (currNode._flags & ~_NODE_FLAG__HAS_POS_OBJ);
+            currNode._flags = flags;
+            const parentNode = currNode.parent;
+            if (parentNode === null) {
+                break;
+            }
+            if ((flags & _NODE_FLAG__IS_ONE_CHILD) !== 0) {
+                const zeroChild = parentNode._zeroChild;
+                if (zeroChild !== null) {
+                    const zeroFlags = zeroChild._flags;
+                    if ((zeroFlags & _NODE_FLAG__HAS_POS_OBJ) !== 0) {
+                        return;
+                    }
+                }
+            } else {
+                const oneChild = parentNode._oneChild;
+                if (oneChild !== null) {
+                    const oneFlags = oneChild._flags;
+                    if ((oneFlags & _NODE_FLAG__HAS_POS_OBJ) !== 0) {
+                        return;
+                    }
+                }
+            }
+            currNode = parentNode;
+        } while (true);
+    }
+
+    _setNegObjFlag(node) {
+        let currNode = node;
+        do {
+            const flags = (currNode._flags | _NODE_FLAG__HAS_NEG_OBJ);
+            currNode._flags = flags;
+            const parentNode = currNode.parent;
+            if (parentNode === null) {
+                break;
+            }
+            if ((flags & _NODE_FLAG__HAS_NEG_OBJ) !== 0) {
+                return;
+            }
+            currNode = parentNode;
+        } while (true);
+    }
+
+    _unsetNegObjFlag(node) {
+        let currNode = node;
+        do {
+            const flags = (currNode._flags & ~_NODE_FLAG__HAS_NEG_OBJ);
+            currNode._flags = flags;
+            const parentNode = currNode.parent;
+            if (parentNode === null) {
+                break;
+            }
+            if ((flags & _NODE_FLAG__IS_ONE_CHILD) !== 0) {
+                const zeroChild = parentNode._zeroChild;
+                if (zeroChild !== null) {
+                    const zeroFlags = zeroChild._flags;
+                    if ((zeroFlags & _NODE_FLAG__HAS_NEG_OBJ) !== 0) {
+                        return;
+                    }
+                }
+            } else {
+                const oneChild = parentNode._oneChild;
+                if (oneChild !== null) {
+                    const oneFlags = oneChild._flags;
+                    if ((oneFlags & _NODE_FLAG__HAS_NEG_OBJ) !== 0) {
+                        return;
+                    }
+                }
+            }
+            currNode = parentNode;
+        } while (true);
+    }
+    
     _parent(node) {
         if (node._parent === null) {
             const oldRoot = node;
-            const newRoot = this._newNode();
+            const newRoot = this._newNode(); // <-- refCount === 1
             newRoot._lvl = oldRoot._lvl + 1;
+            
+            this._incRefCount(newRoot); // child refers to parent
             newRoot._zeroChild = oldRoot;
-            
-            // the default root reference moves one level up,
-            // the old root reference count is decreased
-            // this might mean the old root _refCount
-            // becomes zero, for that reason only handles
-            // should call this method:
-            newRoot._refCount = oldRoot._refCount;
-            oldRoot._refCount = oldRoot._refCount - 1;
-            
             oldRoot._parent = newRoot;
+            
+            this._incRefCount(newRoot); // gains rootNode reference
             this.__rootNode = newRoot;
+            this._decRefCounts(oldRoot); // looses rootNode reference 
+
+            // we need not increase the refcount because it's new
+            return newRoot;
+        } else {
+            const parent = node._parent;
+            this._incRefCount(parent);
+            return parent;
         }
-        return node._parent;
     }
     
     _zeroChild(node) {
         if (node._zeroChild === null) {
-            const zeroChild = new FloatTreeNode();
+            const zeroChild = this._newNode(); // <-- refCount === 1
             zeroChild._parent = node;
+            this._incRefCount(node); // child refers to parent
             node._zeroChild = zeroChild;
+            
+            // we need not increase the refcount because it's new
+            return zeroChild;
+        } else {
+            const zeroChild = node._zeroChild;
+            this._incRefCount(zeroChild);
+            return zeroChild;
         }
-        return node._zeroChild;
     }
     
     _oneChild(node) {
         if (node._oneChild === null) {
-            const oneChild = new FloatTreeNode();
+            const oneChild = this._newNode(); // <-- refCount === 1
             oneChild._parent = node;
+            this._incRefCount(node); // child refers to parent
             node._oneChild = oneChild;
+            oneChild.flags = (node._flags | _NODE_FLAG__IS_ONE_CHILD);
+            // we need not increase the refcount because it's new
+            return oneChild;
+        } else {
+            const oneChild = node._oneChild;
+            this._incRefCount(oneChild);
+            return oneChild;
         }
-        return node._oneChild;
     }
 }
+
+const _NODE_FLAG__IS_ONE_CHILD = (1 << 0);
+const _NODE_FLAG__HAS_NEG_OBJ = (1 << 1);
+const _NODE_FLAG__HAS_POS_OBJ = (1 << 2);
 
 class FloatTreeNode {
 
     constructor() {
         this._lvl = 0;
+        this._flags = 0;
         this._parent = null;
         this._zeroChild = null;
         this._oneChild = null;
         this._posObj = null;
         this._negObj = null;
-        this._refCount = 0;
+        this._refCount = 1; // <-- invariant says node can only 
+                            //     exist, in the wild, with non-
+                            //     zero refCOunt
     }
 
 }
@@ -175,38 +294,23 @@ class FloatTreeHandle {
     }
 
     attach(node) {
-        if (node !== null) {
+        const tree = this.__tree;
+        if (tree.__node !== null) {
             throw new Error(`handle is already attached to node`)
         }
+        tree._incRefCount(node);
         this.__node = node;
-        // handle now implicitly references node
-        // this means it will check if node or
-        // node ancestor needs to be freed
-        // upon movement or detachment.
-        // This allows construction of the tree 
-        // without quadratic overhead due to
-        // constant _incRefCount _decRefCount calls.
     }
 
-    detach(node) {
+    detach() {
         const tree = this.__tree;
         let node = this.__node;
         if (node === null) {
             throw new Error(`handle is not attached to node`)
-        }
-        // remove implicit reference,
-        // check if node or node ancestors
-        // need to be freed:
-        while (node._refCount === 0) {
-            const parentNode = node._parent;
-            tree._freeNode(node);
-            node = parentNode;
-            if (node === null) {
-                throw new Error(`invariant violation: root was not referenced`);
-            }
         } 
-        this.__node = null;
         this.__signIsNeg = false;
+        this.__node = null;
+        tree._decRefCount(node);
     }
 
     negate() {
@@ -230,7 +334,7 @@ class FloatTreeHandle {
         }
     }
 
-    deoccupy(obj) {
+    deoccupy() {
         const tree = this.__tree;
         let node = this.__node;
         if (node === null) {
@@ -253,14 +357,14 @@ class FloatTreeHandle {
             throw new Error(`handle is not attached to node`)
         }
         while (node._lvl < lvl) {
-            const parentNode = node._parent;
-            // remove implicit handle reference,
-            // check if node needs to be freed:
-            if (node._refCount === 0) {
-                tree._freeNode(node);
-            }
+            const parentNode = tree._parentNode(node);
+            // switching refcount is not yet needed
+            // parentNode is protected by current node
             node = parentNode;
         }
+        // now that we have the final parent node
+        // we switch the refcount
+        tree._decRefCount(this.__node);
         this.__node = node;
     }
 
@@ -270,11 +374,8 @@ class FloatTreeHandle {
         if (node === null) {
             throw new Error(`handle is not attached to node`)
         }
-        const nextNode = tree._zeroNode(node);
-        // current node is parent of new node,
-        // so implicit reference protects this
-        // node, no freeing necessary:
-        node = nextNode;
+        node = tree._zeroChild(node);
+        tree._decRefCount(this.__node);
         this.__node = node;
     }
 
@@ -284,11 +385,8 @@ class FloatTreeHandle {
         if (node === null) {
             throw new Error(`handle is not attached to node`)
         }
-        const nextNode = tree._oneNode(node);
-        // current node is parent of new node,
-        // so implicit reference protects this
-        // node, no freeing necessary:
-        node = nextNode;
+        node = tree._oneNode(node);
+        tree._decRefCount(this.__node);
         this.__node = node;
     }    
 }
