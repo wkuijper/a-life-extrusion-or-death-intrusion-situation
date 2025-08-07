@@ -1,6 +1,16 @@
 class FloatTree {
+
+    get negInfObj() {
+        return this.__negInfObj;
+    }
     
-    constructor() {
+    get posInfObj() {
+        return this.__posInfObj;
+    }
+    
+    constructor(negInfObj, posInfObj) {
+        this.__negInfObj = negInfObj;
+        this.__posInfObj = posInfObj;
         const rootNode = new FloatTreeNode(); // <-- refCount === 1
         this.__rootNode = rootNode;
         this.__firstFreeNode = null;
@@ -258,6 +268,7 @@ class FloatTree {
             return oneChild;
         }
     }
+
 }
 
 const _NODE_FLAG__IS_ONE_CHILD = (1 << 0);
@@ -388,6 +399,124 @@ class FloatTreeHandle {
         node = tree._oneNode(node);
         tree._decRefCount(this.__node);
         this.__node = node;
-    }    
+    }
+
+    _nearestSuccObj() {
+        const tree = this.__tree;
+        let node = this.__node;
+        let signIsNeg = this.__signIsNeg;
+        if (signIsNeg) {
+            // we're negative: look for a zeroChild above current
+            do {
+                do {
+                    const prevNode = node;
+                    node = node._parent;
+                } while (node !== null && node.zeroChild === prevNode);
+                const zeroChild = node._zeroChild;
+                if (zeroChild !== null && 
+                    ((zeroChild._flags & 
+                         _NODE_FLAG__HAS_NEG_OBJ) !== 0)) {
+                    // we've established one zeroChild above,
+                    // this means that
+                    // the entire tree beneath our current
+                    // location has smaller
+                    // magnitude and (with negative sign) 
+                    // is strictly greater than the point 
+                    // from which we started.
+                    // from here we just pick the element
+                    // with greatest magnitude which (with
+                    // negative sign) is the first successor
+                    // object node
+                    node = zeroChild;
+                    while (node._negObj === null) {
+                        const oneChild = node._oneChild;
+                        if (oneChild === null ||
+                                (oneChild._flags & 
+                                    _NODE_FLAG__HAS_NEG_OBJ) === 0) {
+                            const zeroChild = node._zeroChild;
+                            if (zeroChild === null ||
+                                (zeroChild._flags & 
+                                    _NODE_FLAG__HAS_NEG_OBJ) === 0) {
+                                throw new Error(`invariant violation`);
+                            }
+                            node = zeroChild;
+                        } else {
+                            node = oneChild;
+                        }
+                    }
+                    return node._negObj;  
+                }
+            } while (node !== null);
+            // we didn't find aything in the negative tree
+            signIsNeg = false; // we flip sign
+            node = tree.__rootNode; // we start from the root
+            // from here we pick 
+            // the first object that comes along
+            // or positive infinity if there is none
+            if ((node._flags & _NODE_FLAG__HAS_POS_OBJ) === 0) {
+                return tree.posInfObj;
+            }
+            while (node.posObj === null) {
+                const zeroChild = node._zeroChild;
+                if (zeroChild === null ||
+                        (zeroChild._flags & 
+                            _NODE_FLAG__HAS_POS_OBJ) === 0) {
+                    const oneChild = node._oneChild;
+                    if (oneChild === null ||
+                        (oneChild._flags & 
+                            _NODE_FLAG__HAS_POS_OBJ) === 0) {
+                        throw new Error(`invariant violation`);
+                    }
+                    node = oneChild;
+                } else {
+                    node = zeroChild;
+                }
+            }
+            return node._posObj;
+        } else {
+            // we're positive: look for a oneChild at or above current
+            do {
+                const oneChild = node._oneChild;
+                if (oneChild !== null && 
+                        ((oneChild._flags & 
+                             _NODE_FLAG__HAS_POS_OBJ) !== 0)) {
+                    // we've established one oneChild at or above,
+                    // this means that
+                    // the entire tree beneath our current
+                    // location has greater
+                    // magnitude and (with positive sign) 
+                    // is strictly greater than the point 
+                    // from which we started.
+                    // from here we just pick the element
+                    // with smallest magnitude which (with
+                    // positive sign) is the first successor
+                    // object node
+                    node = oneChild;
+                    while (node._posObj === null) {
+                        const zeroChild = node._zeroChild;
+                        if (zeroChild === null ||
+                                (zeroChild._flags & 
+                                    _NODE_FLAG__HAS_POS_OBJ) === 0) {
+                            const oneChild = node._oneChild;
+                            if (oneChild === null ||
+                                (oneChild._flags & 
+                                    _NODE_FLAG__HAS_POS_OBJ) === 0) {
+                                throw new Error(`invariant violation`);
+                            }
+                            node = oneChild;
+                        } else {
+                            node = zeroChild;
+                        }
+                    }
+                    return node._posObj;
+                }
+                do {
+                    const prevNode = node;
+                    node = node._parent;
+                } while (node !== null && node.oneChild === prevNode);
+            } while (node !== null);
+            return tree.posInfObj;
+        }
+    }
 }
 
