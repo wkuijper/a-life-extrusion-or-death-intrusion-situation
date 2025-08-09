@@ -17,45 +17,20 @@ class RealValue {
     
 }
 
-const BARE_LIMB_LEN = 20;  // 20 bits fit safely in a javascript number (32 max)
-                           // with some room to spare for tricks (see below)
+const BARE_LIMB_LEN = 30;  // 30 bits fit safely in a javascript number (32 max)
+                           // with some room to spare for tricks
 
-const PUMPED_LIMB_LEN = BARE_LIMB_LEN + 2; // extra bits for overflow makes 22 bits 
+const EXTENDED_LIMB_OVERFLOW = (1 << BARE_LIMB_LEN);
 
-const DRESSED_LIMB_LEN = PUMPED_LIMB_LEN + 8; // extra protocol bits makes 30 bits
-
-
-LIMB_MASK_STATE = (1|2) << PUMPED_LIMB_LEN
-LIMB_MASK_ARG = (1|2|4|8) << PUMPED_LIMB_LEN + 
-
-class LimbProtocolMachine {
-
-    constructor() {
-        this.__state = LIMB_PROTOCOL_EXP_STATE;
-    }
-
-    submitExponentAsJavascriptNumber(expJSN) {
-        
-    }
-
-    submitMantissaPartAsJavascriptNumber(mantissaPartJSN, numberOfBits) {
-        
-    }
-}
+const BARE_LIMB_MASK = EXTENDED_LIMB_OVERFLOW - 1; // Mask of all 1 bits
 
 class LimbString {
 
     _addFinishedLimb(limb) {
-        if (this.__frozen) {
-            throw new Error(`can't modify frozen BitString`);
-        }
         this.__finishedLimbs.push(limb);
     }
 
     _addLimbBit(bit) {
-        if (this.__frozen) {
-            throw new Error(`can't modify frozen BitString`);
-        }
         const currLen = this.__incompleteLimbLen;
         const shiftedBit = bit << currLen;
         const currLimb = this.__inclompleteLimb;
@@ -70,8 +45,18 @@ class LimbString {
             this.__inclompleteLimbLen = 0;
         }
     }
+
+    addWholeLimb(limb) {
+        if (this.__frozen) {
+            throw new Error(`can't modify frozen BitString`);
+        }
+        if (this.__inclompleteLimbLen > 0) {
+            throw new Error(`can't add whole limb with incomplete limb pending`);
+        }
+        this._addFinishedLimb(limb);
+    }
     
-    _addLimbBits(wordJSN, numberOfBits) {
+    addLimbBits(wordJSN, numberOfBits) {
         if (this.__frozen) {
             throw new Error(`can't modify frozen BitString`);
         }
@@ -121,7 +106,7 @@ class LimbString {
         this.__frozen = true;
         return this;
     }
-    
+
     constructor() {
         this.__finishedLimbs = [];
         this.__inclompleteLimb = 0;
@@ -130,12 +115,139 @@ class LimbString {
     }
 }
 
-class NatNumber {
+class BigNatural {
 
-    constructor(frozenBitString) {
-        
+    constructor(maxNumberOfLimbs) {
+        this._limbs = Uint32Array(maxNumberOfLimbs);
+        this._numberOfLimbs = 0; // invariant: last limb is nonzero
+        this._sign = 1;
+    }
+    
+}
+
+class BigInteger {
+
+    constructor(maxNumberOfLimbs) {
+        this._magnitude = new BigNatural(maxNumberOfLimbs);
+        this._sign = 1;
+    }
+
+}
+
+function addBigNaturals(bnA, bnB) {
+    const numberOfLimbsA = bnA._numberOfLimbs;
+    const numberOfLimbsB = bnB._numberOfLimbs;
+    const longerB = (numberOfLimbsB > numberOfLimbsA);
+    const bn1 = longerB ? bnB : bnA;
+    const bn2 = longerB ? bnA : bnB;
+    const numberOfLimbs1 = bn1._numberOfLimbs;
+    const numberOfLimbs2 = bn2._numberOfLimbs;
+    const limbs1 = bn1._limbs;
+    const limbs2 = bn2._limbs;
+    const result = new BigInteger(numberOfLimbs1 + 1);
+    const resultLimbs = result._limbs;
+    let carry = 0;
+    // first add all the common limbs
+    // note: numberOfLimbs2 <= numberOfLimbs1
+    for (let i = 0; i < numberOfLimbs2; i++) { 
+        const limb1 = limbs1[i];
+        const limb2 = limbs2[i];
+        const sum = carry + limb1 + limb2;
+        const limb = sum & BARE_LIMB_MASK;
+        resultLimbs[i] = limb;
+        carry = sum >> BARE_LIMB_LEN;
+    }
+    // next add the remaining limbs
+    // note: numberOfLimbs1 >= numberOfLimbs2
+    for (let i = numberOfLimbs2; i < numberOfLimbs1; i++) { 
+        const limb1 = limbs1[i];
+        const sum = carry + limb1;
+        const limb = sum & BARE_LIMB_MASK;
+        resultLimbs[i] = limb;
+        carry = sum >> BARE_LIMB_LEN;
+    }
+    // finally append the carry (if there is one)
+    if (carry > 0) {
+        resultLimbs[numberOfLimbs1] = carry;
+        result._numberOfLimbs = numberOfLimbs1 + 1;
+    } else {
+        result._numberOfLimbs = numberOfLimbs1;
     }
 }
+
+function compareBigNaturals(bnA, bnB) {
+    const numberOfLimbsA = bnA._numberOfLimbs;
+    const numberOfLimbsB = bnB._numberOfLimbs;
+    if (numberOfLimbsA > numberOfLimbsB) {
+        return 1;
+    }
+    if (numberOfLimbsA < numberOfLimbsB) {
+        return -1;
+    }
+    const numberOfLimbs = numberOfLimbsA // (=== numberOfLimbsB)
+    if (numberOfLimbs === 0) {
+        return 0;
+    }
+    const limbsA = bnA._limbs;
+    const limbsB = bnA._limbs;
+    for (let i = numberOfLimbs - 1; i >= 0; i--) {
+        const limbA = limbsA[i];
+        const limbB = limbsB[i];
+        if (limbA < limbB) {
+            return -1;
+        }
+        if (limbA > limbB) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+function subtractBigNaturals(bn1, bn2) {
+    // precondition: bn1 >= bn2 
+    // (which implies bn1._numberOfLimbs >= bn2._numberOfLimbs)
+    const numberOfLimbs1 = bn1._numberOfLimbs;
+    const numberOfLimbs2 = bn2._numberOfLimbs;
+    const limbs1 = bn1._limbs;
+    const limbs2 = bn2._limbs;
+    const result = new BigInteger(numberOfLimbs1);
+    const resultLimbs = result._limbs;
+    let carry = 0;
+    // first subtract all the common limbs
+    // note: numberOfLimbs2 <= numberOfLimbs1
+    for (let i = 0; i < numberOfLimbs2; i++) { 
+        const limb1 = limbs1[i];
+        const limb2 = limbs2[i];
+        const diff = (limb1 | EXTENDED_LIMB_OVERFLOW) - (limb2 + carry);
+        const limb = diff & BARE_LIMB_MASK;
+        resultLimbs[i] = limb;
+        carry = (~diff) >> BARE_LIMB_LEN;
+    }
+    // next subtract the remaining limbs
+    // note: numberOfLimbs1 >= numberOfLimbs2
+    for (let i = numberOfLimbs2; i < numberOfLimbs1; i++) {
+        const limb1 = limbs1[i];
+        const diff = (limb1 | EXTENDED_LIMB_OVERFLOW) - carry;
+        const limb = diff & BARE_LIMB_MASK;
+        resultLimbs[i] = limb;
+        carry = (~diff) >> BARE_LIMB_LEN;
+        
+        const limb1 = limbs1[i];
+        const limb2 = 0;
+        const sum = carry + limb1 + limb2;
+        const limb = sum & BARE_LIMB_MASK;
+        resultLimbs[i] = limb;
+        carry = sum >> BARE_LIMB_LEN;
+    }
+    // finally append the carry (if there is one)
+    if (carry > 0) {
+        resultLimbs[numberOfLimbs1] = carry;
+        result._numberOfLimbs = numberOfLimbs1 + 1;
+    } else {
+        result._numberOfLimbs = numberOfLimbs1;
+    }
+}
+
 class RealExpr {
 
     constructor(reality) {
