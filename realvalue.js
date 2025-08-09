@@ -20,6 +20,8 @@ class RealValue {
 const BARE_LIMB_LEN = 30;  // 30 bits fit safely in a javascript number (32 max)
                            // with some room to spare for tricks
 
+const BARE_LIMB_LEN_MINUS_ONE = BARE_LIMB_LEN - 1;
+
 const EXTENDED_LIMB_OVERFLOW = (1 << BARE_LIMB_LEN);
 
 const BARE_LIMB_MASK = EXTENDED_LIMB_OVERFLOW - 1; // Mask of all 1 bits
@@ -140,11 +142,25 @@ function addBigNaturals(bnA, bnB) {
     const longerB = (numberOfLimbsB > numberOfLimbsA);
     const bn1 = longerB ? bnB : bnA;
     const bn2 = longerB ? bnA : bnB;
+    const result = new BigNatural(bn1._numberOfLimbs + 1);
+    return __addBigNaturals(bn1, bn2, result);
+}
+
+function _addBigNaturals(bnA, bnB, result) {
+    const numberOfLimbsA = bnA._numberOfLimbs;
+    const numberOfLimbsB = bnB._numberOfLimbs;
+    const longerB = (numberOfLimbsB > numberOfLimbsA);
+    const bn1 = longerB ? bnB : bnA;
+    const bn2 = longerB ? bnA : bnB;
+    return __addBigNaturals(bn1, bn2, result);
+}
+
+function __addBigNaturals(bn1, bn2, result) {
+    // precondition: bn1._numberOfLimbs >= bn2._numberOfLimbs
     const numberOfLimbs1 = bn1._numberOfLimbs;
     const numberOfLimbs2 = bn2._numberOfLimbs;
     const limbs1 = bn1._limbs;
     const limbs2 = bn2._limbs;
-    const result = new BigInteger(numberOfLimbs1 + 1);
     const resultLimbs = result._limbs;
     let carry = 0;
     // first add all the common limbs
@@ -173,6 +189,7 @@ function addBigNaturals(bnA, bnB) {
     } else {
         result._numberOfLimbs = numberOfLimbs1;
     }
+    return result;
 }
 
 function compareBigNaturals(bnA, bnB) {
@@ -206,11 +223,17 @@ function compareBigNaturals(bnA, bnB) {
 function subtractBigNaturals(bn1, bn2) {
     // precondition: bn1 >= bn2 
     // (which implies bn1._numberOfLimbs >= bn2._numberOfLimbs)
+    const result = new BigInteger(bn1._numberOfLimbs);
+    return _subtractBigNaturals(bn1, bn2, result);
+}
+
+function _subtractBigNaturals(bn1, bn2, result) {
+    // precondition: bn1 >= bn2 
+    // (which implies bn1._numberOfLimbs >= bn2._numberOfLimbs)
     const numberOfLimbs1 = bn1._numberOfLimbs;
     const numberOfLimbs2 = bn2._numberOfLimbs;
     const limbs1 = bn1._limbs;
     const limbs2 = bn2._limbs;
-    const result = new BigInteger(numberOfLimbs1);
     const resultLimbs = result._limbs;
     let carry = 0;
     // first subtract all the common limbs
@@ -223,31 +246,235 @@ function subtractBigNaturals(bn1, bn2) {
         resultLimbs[i] = limb;
         carry = (~diff) >> BARE_LIMB_LEN;
     }
-    // next subtract the remaining limbs
+    // next subtract all but the last of the remaining limbs
     // note: numberOfLimbs1 >= numberOfLimbs2
-    for (let i = numberOfLimbs2; i < numberOfLimbs1; i++) {
+    const numberOfLimbs1minus1 = numberOfLimbs1 - 1;
+    for (let i = numberOfLimbs2; i < numberOfLimbs1minus1; i++) {
         const limb1 = limbs1[i];
         const diff = (limb1 | EXTENDED_LIMB_OVERFLOW) - carry;
         const limb = diff & BARE_LIMB_MASK;
         resultLimbs[i] = limb;
         carry = (~diff) >> BARE_LIMB_LEN;
-        
-        const limb1 = limbs1[i];
-        const limb2 = 0;
-        const sum = carry + limb1 + limb2;
-        const limb = sum & BARE_LIMB_MASK;
-        resultLimbs[i] = limb;
-        carry = sum >> BARE_LIMB_LEN;
     }
-    // finally append the carry (if there is one)
-    if (carry > 0) {
-        resultLimbs[numberOfLimbs1] = carry;
-        result._numberOfLimbs = numberOfLimbs1 + 1;
+    // finally subtract the last limb
+    // and set the correct number of result limbs
+    const lastLimb1 = limbs1[numberOfLimbs1minus1];
+    // invariant: lastLimb !== 0
+    const lastDiff = (lastLimb1 | EXTENDED_LIMB_OVERFLOW) - carry;
+    const lastResultLimb = lastDiff & BARE_LIMB_MASK;
+    // invariant: carry must be zero because lastLimb !== 0
+    if (lastResultLimb === 0) {
+        result._numberOfLimbs = numberOfLimbs1minus1;  
     } else {
+        resultLimbs[numberOfLimbs1minus1] = lastResultLimb;
         result._numberOfLimbs = numberOfLimbs1;
     }
+    return result;
 }
 
+function shiftRightBigNatural(bn) {
+    const result = new BigNatural(bn._numberOfLimbs);
+    return _shiftRightBigNatural(bn, bits, result);
+}
+
+function _shiftRightBigNatural(bn, result) {
+    const numberOfLimbs = bn._numberOfLimbs;
+    const limbs = bn._limbs;
+    const resultLimbs = result._limbs;
+    // shift the most significant limb first
+    let numberOfLimbsMinus1 = numberOfLimbs - 1;
+    const mostSignificantLimb = limbs[numberOfLimbsMinus1];
+    let carry = mostSignificantLimb & 1; 
+    const mostSignificantResultLimb = (mostSignificantLimb >> 1);
+    if (mostSignificantResultLimb === 0) {
+        result._numberOfLimbs = numberOfLimbsMinus1;
+    } else {
+        result._numberOfLimbs = numberOfLimbs;
+        resultLimbs[numberOfLimbs1minus1] = mostSignificantResultLimb;
+    }
+    // then do the rest taking into acount the carry bit
+    for (let i = numberOfLimbsMinus1 - 1; i >= 0; i++) {
+        const limb = limbs[i];
+        const nextCarry = limb & 1; 
+        const resultLimb = (limb >> 1) | (carry << BARE_LIMB_LEN_MINUS_ONE);
+        resultLimbs[i] = resultLimb;
+        carry = nextCarry;
+    }
+    return result;
+}
+
+function _shiftLeftBigNatural(bn, result) {
+    // precondition: capacity of result is one greater than the number of limbs in bn
+    const numberOfLimbs = bn._numberOfLimbs;
+    const limbs = bn._limbs;
+    const resultLimbs = result._limbs;
+    // shift the limbs from the least significant to the most significant
+    const carryMask = 1 << (BARE_LIMB_LEN_MINUS_ONE);
+    let carry = 0;
+    for (let i = 0; i < numberOfLimbs; i++) {
+        const limb = limbs[i];
+        const nextCarry = (limb & carryMask) >> BARE_LIMB_LEN_MINUS_ONE; 
+        const resultLimb = (limb << 1) | carry;
+        resultLimbs[i] = resultLimb;
+        carry = nextCarry;
+    }
+    // put the carry in
+    if (carry === 0) {
+        result._numberOfLimbs = numberOfLimbs;
+    } else {
+        resultLimbs[numberOfLimbs] = carry;
+        result._numberOfLimbs = numberOfLimbs + 1;
+    }
+    return result;
+}
+
+function _shiftLeftBigNaturalByBits(bn, numberOfBitsToShift, result) {
+    // precondition: numberOfBitsToShift < BARE_LIMB_LEN
+    // precondition: capacity of result is one greater than the number of limbs in bn
+    const numberOfLimbs = bn._numberOfLimbs;
+    const limbs = bn._limbs;
+    const resultLimbs = result._limbs;
+    // shift the limbs from the least significant to the most significant
+    const numberOfBitsToUnshift = BARE_LIMB_LEN - numberOfBitsToShift;
+    const carryMask = ((1 << numberOfBitsToShift) - 1) << numberOfBitsToUnshift;
+    let carry = 0;
+    for (let i = 0; i < numberOfLimbs; i++) {
+        const limb = limbs[i];
+        const nextCarry = (limb & carryMask) >> numberOfBitsToUnshift; 
+        const resultLimb = (limb << numberOfBitsToShift) | carry;
+        resultLimbs[i] = resultLimb;
+        carry = nextCarry;
+    }
+    // put the carry in
+    if (carry === 0) {
+        result._numberOfLimbs = numberOfLimbs;
+    } else {
+        resultLimbs[numberOfLimbs] = carry;
+        result._numberOfLimbs = numberOfLimbs + 1;
+    }
+    return result;
+}
+
+function _shiftLeftBigNaturalByLimbs(bn, numberOfLimbsToShift, result) {
+    // precondition: numberOfLimbsToShift < bn._numberOfLimbs
+    // precondition: capacity of result is numberOfLimbs + numberOfLimbsToShift
+    const numberOfLimbs = bn._numberOfLimbs;
+    const limbs = bn._limbs;
+    const resultLimbs = result._limbs;
+    // first the shifted limbs
+    for (let i = numberOfLimbs - 1; i >= 0; i--) {
+        resultLimbs[i + numberOfLimbsToShift] = limbs[i];
+    }
+    // then pad the rest with zero-limbs
+    for (let i = numberOfLimbsToShift - 1; i >= 0; i--) {
+        resultLimbs[i] = 0;
+    }
+    result._numberOfLimbs = numberOfLimbs + numberOfLimbsToShift;
+    return result;
+}
+
+function multiplyBigNaturals(bnA, bnB) {
+    const result = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
+    const bnBmutable = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
+    _copyBigNatural(bnB, bnBmutable);
+    return _multiplyBigNaturals(bnA, bnBmutable, result);
+}
+
+function _multiplyBigNaturals(bnA, bnBmutable, result) {
+    // algorithm outline:
+    //   * iterate over the bits of A, 
+    //   * going from least- to most-significant bit, 
+    //   * in case the A-bit is one: add B to the result, 
+    //   * in case the A-bit is zero: do nothing, 
+    //   * shift B to the left for the next iteration
+    result._numberOfLimbs = 0;
+    const numberOfLimbsA = bnA._numberOfLimbs;
+    const limbsA = bnA._limbs;
+    let currLimbIndex = 0;
+    let currBitIndexWithinCurrLimb = 0;
+    for (let i = 0; i < numberOfLimbsA; i++) {
+        const limbA = limbsA[i];
+        for (let j = 0; j < BARE_LIMB_LEN; j++)) {
+            const bitA = (limbA >> j) & 1;
+            if (bitA === 1) {
+                __addBigNaturals(bnBmutable, result, result);
+            }
+            _shiftLeftBigNatural(bnBmutable, bnBmutable);
+        }
+    }
+    return result;
+}
+
+function multiplyBigNaturals(bnA, bnB) {
+    const result = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
+    const bnBmutable = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
+    _copyBigNatural(bnB, bnBmutable);
+    return _multiplyBigNaturals(bnA, bnBmutable, result);
+}
+
+function _multiplyBigNaturals(bnA, bnBmutable, result) {
+    // algorithm outline:
+    //   * iterate over the bits of A, 
+    //   * going from least- to most-significant bit, 
+    //   * in case the A-bit is one: add B to the result, 
+    //   * in case the A-bit is zero: do nothing, 
+    //   * shift B to the left for the next iteration
+    result._numberOfLimbs = 0;
+    const numberOfLimbsA = bnA._numberOfLimbs;
+    const limbsA = bnA._limbs;
+    let currLimbIndex = 0;
+    let currBitIndexWithinCurrLimb = 0;
+    for (let i = 0; i < numberOfLimbsA; i++) {
+        const limbA = limbsA[i];
+        for (let j = 0; j < BARE_LIMB_LEN; j++)) {
+            const bitA = (limbA >> j) & 1;
+            if (bitA === 1) {
+                __addBigNaturals(bnBmutable, result, result);
+            }
+            _shiftLeftBigNatural(bnBmutable, bnBmutable);
+        }
+    }
+    return result;
+}
+
+function _divideBigNaturals(dividentmutable, divisormutable, result) {
+    // algorithm outline:
+    //   * line up the divisor with the divident, 
+    //   * subtract the exponentiated divisor from 
+    //     the divident to get the intermedidate 
+    //     remainder, 
+    //   * write down the result bit which will
+    //     be the one that corresponds to 
+    //     the place we lined up the exponentiated
+    //     divisor to
+    //   * recurse (conceptually) with the intermediate 
+    //     remainder taking the role of the divident
+    const [dividentLimbIndex, dividentBitIndex] = mostSignificantBitIndex(dividentmutable);
+    const [divisorLimbIndex, divisorBitIndex] = mostSignificantBitIndex(divisormutable);
+    let totalNumberOfBitsShifted = 0;
+    if (divisorLimbIndex > dividentLimbIndex) {
+        return [resultmutable, dividentmutable];
+    }
+    if (divisorLimbIndex === dividentLimbIndex) {
+        if (divisorBitIndex > dividentBitIndex) {
+            return [resultmutable, dividentmutable];
+        } 
+        if (divisorBitIndex < dividentBitIndex)
+            // const numberOfLimbsToShift = 0;
+            const numberOfBitsToShift = dividentBitIndex - divisorBitIndex;
+            _shiftLeftBigNaturalByBits(divisormutable, numberOfBitsToShift, divisormutable);
+            totalNumberOfBitsShifted = numberOfBitsToShift;
+        }
+    } else /* divisorLimbIndex < dividentLimbIndex */ {
+        const numberOfLimbsToShift = dividentLimbIndex - divisorLimbIndex;
+        _shiftLeftBigNaturalByLimbs(divisormutable, numberOfLimbsToShift, divisormutable);
+        if (divisorBitIndex < dividentBitIndex) {
+            const numberOfBitsToShift = 
+        } else if (divisorBitIndex > dividentBitIndex) {
+            
+        }
+    }
+}
 class RealExpr {
 
     constructor(reality) {
