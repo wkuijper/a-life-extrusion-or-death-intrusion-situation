@@ -303,6 +303,52 @@ function _shiftRightBigNatural(bn, result) {
     return result;
 }
 
+function _shiftRightBigNaturalByBits(bn, numberOfBitsToShift, result) {
+    // precondition: numberOfBitsToShift < BARE_LIMB_LEN
+    const numberOfLimbs = bn._numberOfLimbs;
+    const limbs = bn._limbs;
+    const resultLimbs = result._limbs;
+    // shift the most significant limb first
+    const numberOfBitsToUnshift = BARE_LIMB_LEN - numberOfBitsToShift;
+    const carryMask = ((1 << numberOfBitsToShift) - 1);
+    let numberOfLimbsMinus1 = numberOfLimbs - 1;
+    const mostSignificantLimb = limbs[numberOfLimbsMinus1];
+    let carry = mostSignificantLimb & carryMask; 
+    const mostSignificantResultLimb = 
+        (mostSignificantLimb >> numberOfBitsToShift);
+    if (mostSignificantResultLimb === 0) {
+        result._numberOfLimbs = numberOfLimbsMinus1;
+    } else {
+        result._numberOfLimbs = numberOfLimbs;
+        resultLimbs[numberOfLimbs1minus1] = mostSignificantResultLimb;
+    }
+    // then do the rest taking into acount the carry
+    for (let i = numberOfLimbsMinus1 - 1; i >= 0; i++) {
+        const limb = limbs[i];
+        const nextCarry = limb & carryMask; 
+        const resultLimb = 
+            (limb >> numberOfBitsToShift) 
+            | (carry << numberOfBitsToUnshift);
+        resultLimbs[i] = resultLimb;
+        carry = nextCarry;
+    }
+    return result;
+}
+
+function _shiftRightBigNaturalByLimbs(bn, numberOfLimbsToShift, result) {
+    const numberOfLimbs = bn._numberOfLimbs;
+    const numberOfRemainingLimbs = 
+        Math.max(0, numberOfLimbs - numberOfLimbsToShift);
+    const limbs = bn._limbs;
+    const resultLimbs = result._limbs;
+    // shifted the limbs
+    for (let i = 0; i < numberOfRemainingLimbs; i++) {
+        resultLimbs[i] = limbs[i + numberOfLimbsToShift];
+    }
+    result._numberOfLimbs = numberOfRemainingLimbs;
+    return result;
+}
+
 function _shiftLeftBigNatural(bn, result) {
     // precondition: capacity of result is one greater than the number of limbs in bn
     const numberOfLimbs = bn._numberOfLimbs;
@@ -373,34 +419,38 @@ function _shiftLeftBigNaturalByLimbs(bn, numberOfLimbsToShift, result) {
     return result;
 }
 
-function multiplyBigNaturals(bnA, bnB) {
-    const result = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
-    const bnBmutable = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
-    _copyBigNatural(bnB, bnBmutable);
-    return _multiplyBigNaturals(bnA, bnBmutable, result);
+function _shiftLeftBigNaturalByLimbsAndBits(bn, totalNumberOfBitsToShift, result) {
+    const numberOfLimbsToShift = Math.floor(totalNumberOfBits / BARE_LIMB_LEN);
+    const numberOfBitsToShift = (totalNumberOfBitsToShift % BARE_LIMB_LEN);
+    if (numberOfBitsToShift > 0) {
+        _shiftLeftBigNaturalByBits(bn, numberOfBitsToShift, result);
+    }
+    if (numberOfLimbsToShift > 0) {
+        _shiftLeftBigNaturalByLimbs(bn, numberOfLimbsToShift, result);
+    }
+    return result;
 }
 
-function _multiplyBigNaturals(bnA, bnBmutable, result) {
-    // algorithm outline:
-    //   * iterate over the bits of A, 
-    //   * going from least- to most-significant bit, 
-    //   * in case the A-bit is one: add B to the result, 
-    //   * in case the A-bit is zero: do nothing, 
-    //   * shift B to the left for the next iteration
-    result._numberOfLimbs = 0;
-    const numberOfLimbsA = bnA._numberOfLimbs;
-    const limbsA = bnA._limbs;
-    let currLimbIndex = 0;
-    let currBitIndexWithinCurrLimb = 0;
-    for (let i = 0; i < numberOfLimbsA; i++) {
-        const limbA = limbsA[i];
-        for (let j = 0; j < BARE_LIMB_LEN; j++)) {
-            const bitA = (limbA >> j) & 1;
-            if (bitA === 1) {
-                __addBigNaturals(bnBmutable, result, result);
-            }
-            _shiftLeftBigNatural(bnBmutable, bnBmutable);
-        }
+function _shiftRightBigNaturalByLimbsAndBits(bn, totalNumberOfBitsToShift, result) {
+    const numberOfLimbsToShift = Math.floor(totalNumberOfBits / BARE_LIMB_LEN);
+    const numberOfBitsToShift = (totalNumberOfBitsToShift % BARE_LIMB_LEN);
+    if (numberOfLimbsToShift > 0) {
+        _shiftRightBigNaturalByLimbs(bn, numberOfLimbsToShift, result);
+    }
+    if (numberOfBitsToShift > 0) {
+        _shiftRightBigNaturalByBits(bn, numberOfBitsToShift, result);
+    }
+    return result;
+}
+
+function _shiftBigNaturalByLimbsAndBits(bn, totalNumberOfBitsToShiftLeft, result) {
+    const numberOfLimbsToShiftLeft = Math.floor(totalNumberOfBits / BARE_LIMB_LEN);
+    const numberOfBitsToShiftLeft = (totalNumberOfBitsToShift % BARE_LIMB_LEN);
+    if (totalNumberOfLimbsToShiftLeft > 0) {
+        _shiftLeftBigNaturalByLimbsAndBits(bn, totalNumberOfBitsToShiftLeft, result);
+    } else if (totalNumberOfBitsToShiftLeft < 0) {
+        const totalNumberOfBitsToShiftRight = -totalNumberOfBitsToShiftLeft;
+        _shiftRightBigNaturalByLimbsAndBits(bn, totalNumberOfBitsToShiftRight, result);
     }
     return result;
 }
@@ -437,6 +487,52 @@ function _multiplyBigNaturals(bnA, bnBmutable, result) {
     return result;
 }
 
+function multiplyBigNaturals(bnA, bnB) {
+    const result = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
+    const bnBmutable = new BigNatural(bnA._numberOfLimbs + bnB.numberOfLimbs);
+    _copyBigNatural(bnB, bnBmutable);
+    return _multiplyBigNaturals(bnA, bnBmutable, result);
+}
+
+function _multiplyBigNaturals(bnA, bnBmutable, result) {
+    // algorithm outline:
+    //   * iterate over the bits of A, 
+    //   * going from least- to most-significant bit, 
+    //   * in case the A-bit is one: add B to the result, 
+    //   * in case the A-bit is zero: do nothing, 
+    //   * shift B to the left for the next iteration
+    result._numberOfLimbs = 0;
+    const numberOfLimbsA = bnA._numberOfLimbs;
+    const limbsA = bnA._limbs;
+    let currLimbIndex = 0;
+    let currBitIndexWithinCurrLimb = 0;
+    for (let i = 0; i < numberOfLimbsA; i++) {
+        const limbA = limbsA[i];
+        for (let j = 0; j < BARE_LIMB_LEN; j++)) {
+            const bitA = (limbA >> j) & 1;
+            if (bitA === 1) {
+                __addBigNaturals(bnBmutable, result, result);
+            }
+            _shiftLeftBigNatural(bnBmutable, bnBmutable);
+        }
+    }
+    return result;
+}
+
+function bigNaturalIsZero(bn) {
+    return (bn._numberOfLimbs === 0);
+}
+
+function mostSignificantBitIndexInLimb(limb) {
+    let bitIndex = 0;
+    let bit = 1;
+    while (bitIndex < BARE_LIMB_LEN && (limb & bit === 0)) {
+        bitIndex++;
+        bit = bit << 1;
+    }
+    return bitIndex;
+}
+    
 function _divideBigNaturals(dividentmutable, divisormutable, result) {
     // algorithm outline:
     //   * line up the divisor with the divident, 
@@ -449,29 +545,39 @@ function _divideBigNaturals(dividentmutable, divisormutable, result) {
     //     divisor to
     //   * recurse (conceptually) with the intermediate 
     //     remainder taking the role of the divident
-    const [dividentLimbIndex, dividentBitIndex] = mostSignificantBitIndex(dividentmutable);
-    const [divisorLimbIndex, divisorBitIndex] = mostSignificantBitIndex(divisormutable);
-    let totalNumberOfBitsShifted = 0;
-    if (divisorLimbIndex > dividentLimbIndex) {
-        return [resultmutable, dividentmutable];
+    if (bigNaturalIsZero(divisormutable)) {
+        throw new Error(`division by zero`);
     }
-    if (divisorLimbIndex === dividentLimbIndex) {
-        if (divisorBitIndex > dividentBitIndex) {
-            return [resultmutable, dividentmutable];
-        } 
-        if (divisorBitIndex < dividentBitIndex)
-            // const numberOfLimbsToShift = 0;
-            const numberOfBitsToShift = dividentBitIndex - divisorBitIndex;
-            _shiftLeftBigNaturalByBits(divisormutable, numberOfBitsToShift, divisormutable);
-            totalNumberOfBitsShifted = numberOfBitsToShift;
+    if (bigNaturalIsZero(dividentmutable)) {
+        return; // divident === remainder
+    }
+    let totalNumberOfBitsByWhichTheDivisorWasShifted = 0;
+    do {
+        const numberOfDividentLimbs = dividentmutable._numberOfLimbs;
+        const numberOfDivisorLimbs = divisormutable._numberOfLimbs;
+        const dividentLimbs = divident._limbs;
+        const divisorLimbs = divisor._limbs;
+        const lastDividentLimb = dividentLimbs[numberOfDividentLimbs];
+        const lastDivisorLimb = dividentLimbs[numberOfDividentLimbs];
+        const bitIndexInLastDividentLimb = mostSignificantBitIndexInLimb(lastDividentLimb);
+        const bitIndexInLastDivisorLimb = mostSignificantBitIndexInLimb(lastDivisorLimb);
+        const bitIndexInDivident = numberOfDividentLimbs * BARE_LIMB_LEN + bitIndexInLastDividentLimb;
+        const bitIndexInDivisor = numberOfDivisorLimbs * BARE_LIMB_LEN + bitIndexInLastDivisorLimb;
+        const diffInBitsBetweenDividentAndDivisor = bitIndexInDivident - bitIndexInDivisor;
+        if (diffInBitsBetweenDividentAndDivisor < -totalNumberOfBitsByWhichTheDivisorWasShifted) {
+            return; // natural long division is done, divident contains the remainder
         }
-    } else /* divisorLimbIndex < dividentLimbIndex */ {
-        const numberOfLimbsToShift = dividentLimbIndex - divisorLimbIndex;
-        _shiftLeftBigNaturalByLimbs(divisormutable, numberOfLimbsToShift, divisormutable);
-        if (divisorBitIndex < dividentBitIndex) {
-            const numberOfBitsToShift = 
-        } else if (divisorBitIndex > dividentBitIndex) {
-            
+        _shiftBigNaturalByLimbsAndBits(
+            divisormutable, diffInBitsBetweenDividentAndDivisor, divisormutable);
+        totalNumberOfBitsByWhichTheDivisorWasShifted += diffInBitsBetweenDividentAndDivisor;
+        if (bigNaturalIsLargerThanOrEqualTo(dividentmutable, divisormutable)) {
+            _subtractBigNaturals(dividentmutable, divisormutable, dividentmutable);
+        } else {
+            if (-1 < -totalNumberOfBitsByWhichTheDivisorWasShifted) {
+                return; // natural long division is done, divident contains the remainder
+            }
+            _shiftRightBigNatural(divisormutable, divisormutable);
+            _shiftRightBigNatural(counter, counter);
         }
     }
 }
