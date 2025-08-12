@@ -122,7 +122,6 @@ class BigNatural {
     constructor(maxNumberOfLimbs) {
         this._limbs = Uint32Array(maxNumberOfLimbs);
         this._numberOfLimbs = 0; // invariant: last limb is nonzero
-        this._sign = 1;
     }
     
 }
@@ -190,6 +189,34 @@ function __addBigNaturals(bn1, bn2, result) {
         result._numberOfLimbs = numberOfLimbs1;
     }
     return result;
+}
+
+function _addPowerOfTwoToBigNatural(exp, bnmutable) {
+    // pre-condition: exp >= 0
+    // pre-condition: bnmutable capacity fits the result of adding 2^exp
+    const numberOfLimbs = bnmutable._numberOfLimbs;
+    const limbs = bnmutable._limbs;
+    const expPlusOne = exp + 1;
+    const numberOfVirtualLimbs = math.ceil(expPlusOne / BARE_LIMB_LEN);
+    const minimalRequiredNumberOfLimbs = Math.max(numberOfLimbs, numberOfVirtualLimbs);
+    for (let i = numberOfLimbs; i < minimalRequiredNumberOfLimbs; i++) {
+        limbs[i] = 0;
+    }
+    const numberOfVirtualLimbsMinus1 = numberOfVirtualLimbs - 1;
+    const expInMostSignificantVirtualLimb = exp - (numberOfVirtualLimbsMinus1 * BARE_LIMB_LEN); 
+    let carry = 1 << expInMostSignificantVirtualLimb;
+    let currLimbIndex = numberOfVirtualLimbsMinus1;
+    do {
+        const currLimb = currLimbIndex < minimalRequiredNumberOfLimbs ? limbs[currLimbIndex] : 0;
+        const extIncLimb = currLimb + carry;
+        const nextCarry = (extLimb & EXTENDED_LIMB_OVERFLOW) >> BARE_LIMB_LEN;
+        carry = nextCarry;
+        const bareIncLimb = extLimb & BARE_LIMB_MASK;
+        limbs[currLimbIndex] = bareIncLimb;
+        currLimbIndex++;
+    } while (carry > 0);
+    bnmutable._numberOfLimbs = currLimbIndex;
+    return bnmutable;
 }
 
 function compareBigNaturals(bnA, bnB) {
@@ -545,42 +572,73 @@ function _divideBigNaturals(dividentmutable, divisormutable, result) {
     //     divisor to
     //   * recurse (conceptually) with the intermediate 
     //     remainder taking the role of the divident
-    if (bigNaturalIsZero(divisormutable)) {
-        throw new Error(`division by zero`);
-    }
-    if (bigNaturalIsZero(dividentmutable)) {
-        return; // divident === remainder
-    }
     let totalNumberOfBitsByWhichTheDivisorWasShifted = 0;
     do {
-        const numberOfDividentLimbs = dividentmutable._numberOfLimbs;
         const numberOfDivisorLimbs = divisormutable._numberOfLimbs;
+        if (numberOfDivisorLimbs === 0) {
+            throw new Error(`division by zero`);
+        }
+        const numberOfDividentLimbs = dividentmutable._numberOfLimbs;
+        if (numberOfDividentLimbs === 0) {
+           return; // natural long division is done, remainder is zero
+        }
         const dividentLimbs = divident._limbs;
         const divisorLimbs = divisor._limbs;
         const lastDividentLimb = dividentLimbs[numberOfDividentLimbs];
         const lastDivisorLimb = dividentLimbs[numberOfDividentLimbs];
-        const bitIndexInLastDividentLimb = mostSignificantBitIndexInLimb(lastDividentLimb);
-        const bitIndexInLastDivisorLimb = mostSignificantBitIndexInLimb(lastDivisorLimb);
-        const bitIndexInDivident = numberOfDividentLimbs * BARE_LIMB_LEN + bitIndexInLastDividentLimb;
-        const bitIndexInDivisor = numberOfDivisorLimbs * BARE_LIMB_LEN + bitIndexInLastDivisorLimb;
-        const diffInBitsBetweenDividentAndDivisor = bitIndexInDivident - bitIndexInDivisor;
-        if (diffInBitsBetweenDividentAndDivisor < -totalNumberOfBitsByWhichTheDivisorWasShifted) {
+        const msbIndexInLastDividentLimb = mostSignificantBitIndexInLimb(lastDividentLimb);
+        const msbIndexInLastDivisorLimb = mostSignificantBitIndexInLimb(lastDivisorLimb);
+        const expDivident = (numberOfDividentLimbs-1) * BARE_LIMB_LEN + msbIndexInLastDividentLimb;
+        const expDivisor = (numberOfDivisorLimbs-1) * BARE_LIMB_LEN + msbIndexInLastDivisorLimb;
+        const expDistanceBetweenDividentAndDivisor = expDivident - expDivisor;
+        if (expDistanceBetweenDividentAndDivisor < -totalNumberOfBitsByWhichTheDivisorWasShifted) {
             return; // natural long division is done, divident contains the remainder
         }
         _shiftBigNaturalByLimbsAndBits(
-            divisormutable, diffInBitsBetweenDividentAndDivisor, divisormutable);
-        totalNumberOfBitsByWhichTheDivisorWasShifted += diffInBitsBetweenDividentAndDivisor;
+            divisormutable, expDistanceBetweenDividentAndDivisor, divisormutable);
+        totalNumberOfBitsByWhichTheDivisorWasShifted += expDistanceBetweenDividentAndDivisor;
         if (bigNaturalIsLargerThanOrEqualTo(dividentmutable, divisormutable)) {
+            // divisor has the same exponent and is less than or equal to the divident 
+            // the same exponent means the most significant bit for both is 1
+            // from this it follows that the difference between the divident and the divisor
+            // is strictly less than half the divisor (if all the remaining bits differ it
+            // will still be one less than the value of the most significant bit)
+            // so strictly less than twice and at least one times
+            // it follows the divisor will fit the divident exactly once
             _subtractBigNaturals(dividentmutable, divisormutable, dividentmutable);
+            _addPowerOfTwoToBigNatural(totalNumberOfBitsByWhichTheDivisorWasShifted, result);
+            // the intermediate remainder will now be strictly less than the shifted divisor 
+            // so we need not subtract the shifted divisor further in this position 
+            // this step in the long division is done, 
+            // we can recurse and (possibly) continue to the next position
         } else {
+            // divisor has the same exponent but is strictly bigger than the divident 
+            // see if we can shift back one bit: 
             if (-1 < -totalNumberOfBitsByWhichTheDivisorWasShifted) {
                 return; // natural long division is done, divident contains the remainder
             }
+            // we can shift:
             _shiftRightBigNatural(divisormutable, divisormutable);
-            _shiftRightBigNatural(counter, counter);
-        }
+            totalNumberOfBitsByWhichTheDivisorWasShifted -= 1;
+            // this will have cut divisor in half (the bit shifted out was guaranteed zero)
+            // half of something strictly bigger is still strictly bigger than half of that something
+            // so if the whole divisor didn't fit the divident once or more
+            // then half the divisor will not fit the divident twice or more
+            // also, the exponent of divisor is now 1 less than the exponent of divident
+            // this means the divisor will fit at least once in the divident
+            // so strictly less than twice and at least one times
+            // it follows the divisor will fit the divident exactly once
+            // we can subtract once:
+            _subtractBigNaturals(dividentmutable, divisormutable, dividentmutable);
+            _addPowerOfTwoToBigNatural(totalNumberOfBitsByWhichTheDivisorWasShifted, result);
+            // the intermediate remainder will now be strictly less than the shifted divisor 
+            // so we need not subtract the shifted divisor further in this position
+            // this step in the long division is done, 
+            // we can recurse and (possibly) continue to the next position
+        }  
     }
 }
+
 class RealExpr {
 
     constructor(reality) {
