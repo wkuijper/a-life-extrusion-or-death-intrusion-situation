@@ -150,11 +150,18 @@ export class LimbicSystem {
  * Arithmetic operations defined over `BigNatural`s are generally
  * implemented to allow for destructive update.
  * 
- * For instance adding two numbers and storing the result by overwriting 
- * the first, effectively yielding an increment operation.
+ * For instance, adding two numbers with {@link BigNaturalSystem#add}, and storing the 
+ * result by overwriting the first, effectively yields an increment 
+ * operation, i.e.:
+ *
+ *         add(a, b, a);
  * 
- * More encapsulated, immutable BigNaturals can then be implemented on top 
- * of this more low-level, mutable implementation.
+ * In pseudocode could be written as:
+ *
+ *         a += b;
+ *
+ * Based on this class, it would be relatively straightforward to create an
+ * encapsulated, immutable, or even canonical, `BigNatural` class.
  */
 class BigNaturalSystem {
 
@@ -171,11 +178,11 @@ class BigNaturalSystem {
         this._bareLimbMask = limbicSystem._bareLimbMask;
     }
 
-    /** Create a new big rational number from a small javascript number.
+    /** Create a new big natural number from a small javascript number.
      * 
-     * @param [number] smallNumber - the number to convert, must be a positive
+     * @param {number} smallNumber - the number to convert, must be a positive
      *    integer representable in at most 28 bits.
-     * @returns [BigRational] A new big natural representing the same number.
+     * @returns {BigNatural} A new big natural representing the same number.
      */
     fromSmallNumber(smallNumber) {
         if (Math.floor(smallNumber) !== smallNumber) {
@@ -188,18 +195,102 @@ class BigNaturalSystem {
             throw new Error(`number is too big`);
         }
         const requiredCapacity = Math.ceil(28 / this._bareLimbLen);
-        this._accomodate(requiredCapacity);
-        
+        const bn = new BigNatural(this, requiredCapacity);
+        const limbs = bn._limbs;
+        let limbIndex = 0;
         while (smallNumber > 0) {
-            
+            const limb = smallNumber & this._bareLimbMask;
+            limbs[limbIndex] = limb;
+            limbIndex++;
+            smallNumber = smallNumber >> this._bareLimbLen;
         }
+        bn._numberOfLimbs = limbIndex;
+        return bn;
+    }
+
+    /** Create a new big natural number from a string in binary notation.
+     * 
+     * @param {string} binaryString - the number to convert, represented in
+     *   binary notation.
+     * @param {string} alphabet - the alphabet to convert the binary digits
+     *   to bits, defaults to: `"01"`
+     * @returns {BigNatural} A new big natural representing the same number.
+     */
+    fromBinaryString(binaryString, alphabet) {
+        if (alphabet === undefined) {
+            alphabet = "01";
+        }
+        const zeroCharacter = alphabet[0];
+        const oneCharacter = alphabet[1];
+        if (binaryString === zeroCharacter) {
+            return new BigNatural(this, 0);
+        }
+        const requiredBits = binaryString.length;
+        const requiredCapacity = Math.ceil(requiredBits / this._bareLimbLen);
+        const bn = new BigNatural(this, requiredCapacity);
+        let limbIndex = 0;
+        let bitIndex = requiredBits;
+        const limbs = bn._limbs;
+        for (let i = 0; i < requiredCapacity; i++) {
+            let limb = 0;
+            for (let j = 0; j < this._bareLimbLen; j++) {
+                const bitCharacter = binaryString[bitIndex];
+                bitIndex--;
+                if (bitCharacter === oneBit) {
+                    limb |= (1 << j);
+                }
+            }
+            limbs[i] = limb;
+        }
+        bn._numberOfLimbs = requiredCapacity;
+        return bn;
+    }
+
+    /** Create a new big natural number from a string in binary notation.
+     * 
+     * @param {string} binaryString - the number to convert, represented in
+     *   binary notation.
+     * @param {string} alphabet - the alphabet to convert the binary digits
+     *   to bits, defaults to: `"01234567890abcdef"`
+     * @returns {BigNatural} A new big natural representing the same number.
+     */
+    fromHexadecimalString(hexadecimalString, alphabet) {
+        if (alphabet === undefined) {
+            alphabet = "0123456789abcdef";
+        }
+        if (hexadecimalString === alphabet[0]) {
+            return new BigNatural(this, 0);
+        }
+        const requiredNibbles = hexadecimalString.length;
+        const requiredBits = requiredNibbles * 4;
+        const requiredCapacity = Math.ceil(requiredBits / this._bareLimbLen);
+        const bn = new BigNatural(this, requiredCapacity);
+        let limbIndex = 0;
+        let nibbleIndex = requiredNibbles;
+        const limbs = bn._limbs;
+        const numberOfNibblesPerLimb = (this._bareLimbLen >> 2);
+        for (let i = 0; i < requiredCapacity; i++) {
+            let limb = 0;
+            for (let j = 0; j < numberOfNibblesPerLimb; j++) {
+                const hexCharacter = hexadecimalString[nibbleIndex];
+                nibbleIndex--;
+                let v = 0;
+                while (alphabet[v] !== hexCharacter) {
+                    v++;
+                }
+                limb |= (v << 4) << (j << 2);
+            }
+            limbs[i] = limb;
+        }
+        bn._numberOfLimbs = requiredCapacity;
+        return bn;
     }
     
     /** Add two arbitrary length natural numbers together.
      *
-     * @param {BigNatural} argA - The first number to add.
-     * @param {BigNatural} argB - The second number to add.
-     * @param {BigNatural} result - The number that will receive the result,
+     * @param {BigNatural} argA - the first big natural to add.
+     * @param {BigNatural} argB - the second big natural to add.
+     * @param {BigNatural} result - the big natural that will receive the result,
      *   could be the same as one of the arguments.
      */
     add(argA, argB, result) {
@@ -259,7 +350,7 @@ class BigNaturalSystem {
      *
      *         arg += (1 << exp)
      *
-     * @param {BigNatural} argmutable - The number to increment.
+     * @param {BigNatural} argmutable - the big natural to increment.
      * @param {BigNatural} exp - The exponent of the power term.
      * @returns {BigNatural} The incremented number.
      */
@@ -293,8 +384,8 @@ class BigNaturalSystem {
     
     /** Compare two arbitrary length natural numbers.
      *
-     * @param {BigNatural} argA - The first number to compare.
-     * @param {BigNatural} argB - The second number to compare.
+     * @param {BigNatural} argA - the first big natural to compare.
+     * @param {BigNatural} argB - the second big natural to compare.
      * @returns {number} Minus one (-1) in case argA < argB, 
      *   plus one (+1) in case argA > argB,
      *   and zero (0) in case argA === argB
@@ -329,11 +420,11 @@ class BigNaturalSystem {
     
     /** Subtract two arbitrary length natural numbers.
      *
-     * @param {BigNatural} argA - The number to subtract from, must be
+     * @param {BigNatural} argA - the big natural to subtract from, must be
      *   greater than or equal to `argB`.
-     * @param {BigNatural} argB - The number to subtract, must be smaller 
+     * @param {BigNatural} argB - the big natural to subtract, must be smaller 
      *   than or equal to `argA`.
-     * @param {BigNatural} result - The number that will receive the result,
+     * @param {BigNatural} result - the big natural that will receive the result,
      *   could be the same as one of the arguments.
      */
     subtract(arg1, arg2, result) {
@@ -568,8 +659,8 @@ class BigNaturalSystem {
 
     /** Shift an arbitrary length natural number.
      *
-     * @param {BigNatural} arg - The number to shift.
-     * @param {number} left - The number of bits to shift, 
+     * @param {BigNatural} arg - the big natural to shift.
+     * @param {number} left - the big natural of bits to shift, 
      *   a positive number shifts left, a negative number shifts right.
      */
     shift(arg, left, result) {
@@ -578,11 +669,11 @@ class BigNaturalSystem {
 
     /** Multiply two arbitrary length natural numbers.
      *
-     * @param {BigNatural} argA - The first number to multiply.
-     * @param {BigNatural} argB - The second number to multiply, is modified
+     * @param {BigNatural} argA - the first big natural to multiply.
+     * @param {BigNatural} argB - the second big natural to multiply, is modified
      *   during the computation, but restored to its original value 
      *   at the end.
-     * @param {BigNatural} result - The number that will receive the result,
+     * @param {BigNatural} result - the big natural that will receive the result,
      *   *CANNOT* be the same as one of the arguments.
      */
     multiply(argA, argBmutable, result) {
@@ -622,7 +713,7 @@ class BigNaturalSystem {
      * @param {BigNatural} divisormutable - The divisor (below the line), is 
      *   modified during the computation, but restored to its original value 
      *   at the end.
-     * @param {BigNatural} result - The number that will receive the result,
+     * @param {BigNatural} result - the big natural that will receive the result,
      *   *CANNOT* be the same as one of the arguments.
      */
     divide(dividentmutable, divisormutable, result) {
@@ -723,6 +814,11 @@ class BigIntegerSystem {
  */
 class BigNatural {
 
+    /**
+     * @param {BigNaturalSystem} bigNaturalSystem - The number system with operations 
+     *   and representational constants.
+     * @param {number} initialCapacity - Pre-allocate space for this many limbs.
+     */
     constructor(bigNaturalSystem, initialCapacity) {
         this._system = bigNaturalSystem;
         this._limbs = Uint32Array(initialCapacity);
@@ -777,6 +873,13 @@ class BigNatural {
         return this._system.compare(this, other) === -1;
     }
 
+    /** Assign this big natural the value of another big natural. 
+     * 
+     * @param {BigNatural} other - the big natural which' value 
+     *   will be assigned to this object.
+     * @returns {BigNatural} this big natural, 
+     *   now representing the value of the other.
+     */
     assign(other) {
         const otherNumberOfLimbs = other._numberOfLimbs;
         const otherLimbs = other._limbs;
@@ -789,57 +892,198 @@ class BigNatural {
         this._numberOfLimbs = otherNumberOfLimbs;
         return this;
     }
-    
-    *hexadecimalDigits() {
-        const bigNatural = this._system;
-        const numberOfLimbs = this._numberOfLimbs;
-        const limbs = this._limbs;
-        const numberOfNibbles = (bigNatural.bareLimbLen >> 2);
-        for (let i = numberOfLimbs - 1; i >= 0; i--) {
-            const limb = limbs[i];
-            let mask = 0xF;
-            for (let j = 0; j < numberOfNibbles; j++) {
-                nibble = (limb & mask) >> (j << 2);
-                yield nibble;
-                mask = mask << 4;
-            }
-            
-        }  
-    }
 
-    *binaryDigits() {
+    /*** Enumerates the hexadecimal nibbles (i.e.: 4 bit values) for this 
+     * big natural value from least- to most-significant, as javascript 
+     * numbers between 0x0 and 0xF.
+     * 
+     * For hexadecimal digit symbols use 
+     * {@link BigNatural#hexadecimalDigits} 
+     * instead.
+     * 
+     * @returns An enumeration of the hexadecimal nibbles.
+     */
+    *_hexadecimalNibbles() {
+        if (this.isZero()) {
+            yield 0;
+            return;
+        }
         const bigNatural = this._system;
         const numberOfLimbs = this._numberOfLimbs;
+        const numberOfLimbsMinusOne = numberOfLimbs - 1;
+        const limbs = this._limbs;
+        const numberOfNibbles = (bigNatural._bareLimbLen >> 2); // divide by 4
+        for (let i = 0; i < numberOfLimbsMinusOne; i++) {
+            let limb = limbs[i];
+            for (let j = 0; j < numberOfNibbles; j++) {
+                nibble = (limb & 0xf);
+                yield nibble;
+                limb = limb >> 4;
+            } 
+        }
+        let lastLimb = limbs[numberOfLimbsMinus1];
+        while (lastLimb !== 0) {
+            nibble = (limb & 0xf);
+            yield nibble;
+            lastLimb = lastLimb >> 4;
+        }; 
+    }
+    
+    /*** Enumerates the hexadecimal digits for this big natural 
+     * value from least- to most-significant as javascript 
+     * characters.
+     * 
+     * For numeric hexadecimal nibbles use 
+     * {@link BigNatural#hexadecimalNibbles} 
+     * instead.
+     * 
+     * @param {string} [alphabet] - the alphabet used for converting the 
+     *   nibbles to the digits, defaults to: `"0123456789abcdef"`
+     * @returns An enumeration of the hexadecimal digits.
+     */
+    *_hexadecimalDigits(alphabet) {
+        if (alphabet === undefined) {
+            alphabet = "0123456789abcdef";
+        }
+        for (const digit of this.hexadecimalNibbles()) {
+            yield alphabet[digit];
+        }
+    }
+    
+    /*** Enumerates the binary digits for this big natural value
+     * from least- to most-significant, as javascript numbers 
+     * between 0 and 1.
+     * 
+     * @returns An enumeration of the hexadecimal digits.
+     */
+    *_binaryBits() {
+        if (this.isZero()) {
+            yield 0;
+            return;
+        }
+        const bigNatural = this._system;
+        const numberOfLimbs = this._numberOfLimbs;
+        const numberOfLimbsMinusOne = numberOfLimbs - 1;
         const limbs = this._limbs;
         const numberOfBits = bigNatural._bareLimbLen;
-        for (let i = numberOfLimbs - 1; i >= 0; i--) {
-            const limb = limbs[i];
-            let mask = 1;
+        for (let i = 0; i < numberOfLimbsMinusOne; i++) {
+            let limb = limbs[i];
             for (let j = 0; j < numberOfBits; j++) {
-                bit = (limb & mask) >> j;
+                bit = (limb & 1);
                 yield bit;
-                mask = mask << 1;
-            }
-            
-        }  
+                limb = limb >> 1;
+            } 
+        }
+        let lastLimb = limbs[numberOfLimbsMinus1];
+        while (lastLimb !== 0) {
+            bit = (limb & 1);
+            yield bit;
+            lastLimb = lastLimb >> 1;
+        };
+    }
+
+    /*** Enumerates the binary digits for this big natural value
+     * from least- to most-significant, as javascript characters.
+     * 
+     * @param {string} [alphabet] - The alphabet used for converting the bits
+     *   to digits, defaults to: `"01"`
+     * @returns An enumeration of the binary digits.
+     */
+    *_binaryDigits(alphabet) {
+        if (alphabet === undefined) {
+            alphabet = "01";
+        }
+        for (const digit of this.binaryBits()) {
+            yield alphabet[digit];
+        }
     }
     
-    *decimalDigits() {
+    /*** Enumerates the decimal digit values for this big natural 
+     * value from least- to most-significant, as javascript numbers 
+     * between 0 and 9.
+     * 
+     * Note: for long numbers this naive implementation is more expensive 
+     * than enumerating binary or hexadecimal because it divides a 
+     * large number by 10 for each digit.
+     *
+     * @returns An enumeration of the decimal digit values.
+     */
+    *_decimalDigitValues() {
+        if (this.isZero()) {
+            yield 0;
+            return;
+        }
         const bigNatural = this._system;
         let remainder = this.clone();
         const ten = bigNatural.fromSmallNumber(10);
         let result = bigNatural.fromSmallNumber(0);
-        if (remainder.isZero()) {
-            yield 0;
-            return;
-        }
         do {
             bigNatural.divide(remainder, ten, result);
             yield remainder.toSmallNumber();
             [remainder, result] = [result, remainder];
-        } while (!remainder.isZero()) {
+        } while (!remainder.isZero());
     }
 
+    /*** Enumerates the decimal digits for this big natural value
+     * from least- to most-significant, as javascript characters.
+     * 
+     * Note: for long numbers this naive implementation is more expensive 
+     * than enumerating binary or hexadecimal because it divides a 
+     * large number by 10 for each digit.
+     *
+     * @param {string} [alphabet] - The alphabet used for converting the 
+     *   digit values to characters, defaults to: `"0123456789"`
+     * @returns An enumeration of the decimal digits.
+     */
+    *_decimalDigits(alphabet) {
+        if (alphabet === undefined) {
+            alphabet = "0123456789";
+        }
+        for (const digit of this.decimalDigitValues()) {
+            yield alphabet[digit];
+        }
+    }
+
+    /** Write out this big natural in binary notation.
+     *
+     * @param {string} [alphabet] - The alphabet used to convert the bits to
+     *   digits, defaults to: `"01"`
+     * @returns {string} This big natural in binary notation. 
+     */
+    toBinaryString(alphabet) {
+        return [...this._binaryDigits(alphabet)].reverse().join("");
+    }
+    
+    /** Write out this big natural in hexadecimal notation.
+     *
+     * @param {string} [alphabet] - The alphabet used to convert the bits to
+     *   digits, defaults to: `"0123456789abcdef"`
+     * @returns {string} This big natural in hexadecimal notation. 
+     */
+    toHexadecimalString(alphabet) {
+        return [...this._hexadecimalDigits(alphabet)].reverse().join("");
+    }
+    
+    /*** Write out this big natural in decimal notation.
+     *
+     * Note: for long numbers this naive implementation is more expensive 
+     * than writing binary or hexadecimal notation because it divides a 
+     * large number by 10 for each digit.
+     *
+     * @param {string} [alphabet] - The alphabet used to convert the bits to
+     *   digits, defaults to: `"0123456789"`
+     * @returns {string} This big natural in decimal notation. 
+     */
+    _toDecimalString(alphabet) {
+        return [...this._decimalDigits(alphabet)].reverse().join("");
+    }
+
+    /** Convert this big natural to a small javascript number.
+     *
+     * The number must fit in 28 bits or this method throws an error.
+     *
+     * @returns {number} The value as a javascript number.
+     */
     toSmallNumber() {
         const bigNatural = this._system;
         const numberOfLimbs = this._numberOfLimbs;
@@ -852,7 +1096,11 @@ class BigNatural {
         }
         return this.toJavascriptNumber();
     }
-        
+    
+    /** Convert this big natural to a javascript number.
+     *
+     * @returns {number} The value (approximated) as a javascript number.
+     */
     toJavascriptNumber() {
         const bigNatural = this._system;
         const numberOfLimbs = this._numberOfLimbs;
@@ -866,7 +1114,11 @@ class BigNatural {
         }
         return jsNumber;
     }
-        
+
+    /** Create a copy of this big natural with its own storage.
+     *
+     * @returns {BigNatual} A clone that can be independently modified/stored.
+     */
     clone() {
         const clone = new BigNatural(this._capacity());
         return clone.assign(this);
