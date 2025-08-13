@@ -31,7 +31,7 @@ class RationalCanonizer {
             return realExpr;
         }
         if (realExpr.value.isPerfectForSure()) {
-            return realExpr.value.reifyToExpr();
+            return realExpr.value.reifyToRationalExpr();
         }
         if (realExpr instanceof UnaryOperationExpr) {
             //["-"].includes(realExpr.operatorStr);
