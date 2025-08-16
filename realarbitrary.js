@@ -131,8 +131,8 @@ export class LimbicSystem {
      */
     mostSignificantBitIndex(limb) {
         let bitIndex = this._bareLimbLenMinusOne;
-        let bit = 1 << this._bareLimbLen;
-        while (bitIndex > 0 && (limb & bit === 0)) {
+        let bit = 1 << this._bareLimbLenMinusOne;
+        while (bitIndex >= 0 && (limb & bit) === 0) {
             bitIndex--;
             bit = bit >> 1;
         }
@@ -163,7 +163,7 @@ export class LimbicSystem {
  * Based on this class, it would be relatively straightforward to create an
  * encapsulated, immutable, or even canonical, `BigNatural` class.
  */
-class BigNaturalSystem {
+export class BigNaturalSystem {
 
     /** 
      * @param {LimbicSystem} limbicSystem - The underlying representation 
@@ -207,13 +207,20 @@ class BigNaturalSystem {
         bn._numberOfLimbs = limbIndex;
         return bn;
     }
-
+    
+    /** Create a new big natural number initialized to zero.
+     * 
+     * @returns {BigNatural} A new big natural representing zero.
+     */
+    fromZero() {
+        return new BigNatural(this, 0);
+    }
     /** Create a new big natural number from a string in binary notation.
      * 
      * @param {string} binaryString - the number to convert, represented in
      *   binary notation.
-     * @param {string} alphabet - the alphabet to convert the binary digits
-     *   to bits, defaults to: `"01"`
+     * @param {string} alphabet - the alphabet to convert the binary digit 
+     *   symbols to binary digit values, defaults to: `"01"`
      * @returns {BigNatural} A new big natural representing the same number.
      */
     fromBinaryString(binaryString, alphabet) {
@@ -246,12 +253,13 @@ class BigNaturalSystem {
         return bn;
     }
 
-    /** Create a new big natural number from a string in binary notation.
+    /** Create a new big natural number from a hexadecimal string.
      * 
-     * @param {string} binaryString - the number to convert, represented in
-     *   binary notation.
-     * @param {string} alphabet - the alphabet to convert the binary digits
-     *   to bits, defaults to: `"01234567890abcdef"`
+     * @param {string} hexadecimalString - the number to convert, represented
+     *   in hexadecimal  notation.
+     * @param {string} alphabet - the alphabet to convert the hexadecimal 
+     *   digit symbols to hexadecimal digit values, 
+     *   defaults to: `"01234567890abcdef"`
      * @returns {BigNatural} A new big natural representing the same number.
      */
     fromHexadecimalString(hexadecimalString, alphabet) {
@@ -356,11 +364,11 @@ class BigNaturalSystem {
      */
     _incrementWithPowerOfTwo(argmutable, exp) {
         // pre-condition: exp >= 0
-        const numberOfLimbs = arg._numberOfLimbs;
+        const numberOfLimbs = argmutable._numberOfLimbs;
         const expPlusOne = exp + 1;
-        const numberOfVirtualLimbs = math.ceil(expPlusOne / this._bareLimbLen);
+        const numberOfVirtualLimbs = Math.ceil(expPlusOne / this._bareLimbLen);
         const requiredCapacity = Math.max(numberOfLimbs, numberOfVirtualLimbs) + 1;
-        argmutable.accomdate(requiredCapacity);
+        argmutable._accomodate(requiredCapacity);
         const limbs = argmutable._limbs;
         for (let i = numberOfLimbs; i < requiredCapacity; i++) { // defensive
             limbs[i] = 0;
@@ -369,12 +377,14 @@ class BigNaturalSystem {
         const expInMostSignificantVirtualLimb = exp - (numberOfVirtualLimbsMinus1 * this._bareLimbLen); 
         let carry = 1 << expInMostSignificantVirtualLimb;
         let currLimbIndex = numberOfVirtualLimbsMinus1;
+        const bareLimbMask = this._bareLimbMask;
+        const extendedLimbOverflow = this._extendedLimbOverflow;
         do {
             const currLimb = limbs[currLimbIndex];
             const extIncLimb = currLimb + carry;
-            const nextCarry = (extLimb & this._extendedLimbOverflow) >> this._bareLimbLen;
+            const nextCarry = (extIncLimb & extendedLimbOverflow) >> this._bareLimbLen;
             carry = nextCarry;
-            const bareIncLimb = extLimb & this._bareLimbMask;
+            const bareIncLimb = extIncLimb & bareLimbMask;
             limbs[currLimbIndex] = bareIncLimb;
             currLimbIndex++;
         } while (carry > 0);
@@ -420,12 +430,12 @@ class BigNaturalSystem {
     
     /** Subtract two arbitrary length natural numbers.
      *
-     * @param {BigNatural} argA - the big natural to subtract from, must be
-     *   greater than or equal to `argB`.
-     * @param {BigNatural} argB - the big natural to subtract, must be smaller 
-     *   than or equal to `argA`.
-     * @param {BigNatural} result - the big natural that will receive the result,
-     *   could be the same as one of the arguments.
+     * @param {BigNatural} argA - the big natural to subtract from, must 
+     *   be greater than or equal to `argB`.
+     * @param {BigNatural} argB - the big natural to subtract, must be 
+     *   smaller than or equal to `argA`.
+     * @param {BigNatural} result - the big natural that will receive the 
+     *   result, could be the same as one of the arguments.
      */
     subtract(arg1, arg2, result) {
         // precondition: arg1 >= arg2 
@@ -434,42 +444,55 @@ class BigNaturalSystem {
         const numberOfLimbs2 = arg2._numberOfLimbs;
         const limbs1 = arg1._limbs;
         const limbs2 = arg2._limbs;
-        result.accomodate(numberOfLimbs1);
+        result._accomodate(numberOfLimbs1);
         const resultLimbs = result._limbs;
         let carry = 0;
         // first subtract all the common limbs
         // note: numberOfLimbs2 <= numberOfLimbs1
+        const extendedLimbOverflow = this._extendedLimbOverflow;
+        const bareLimbMask = this._bareLimbMask;
+        const bareLimbLen = this._bareLimbLen;
+        let lastNonZeroResultLimb = -1;
         for (let i = 0; i < numberOfLimbs2; i++) { 
             const limb1 = limbs1[i];
             const limb2 = limbs2[i];
-            const diff = (limb1 | this._extendedLimbOverflow) - (limb2 + carry);
-            const limb = diff & this._bareLimbMask;
+            const diff = (limb1 | extendedLimbOverflow) - (limb2 + carry);
+            const limb = diff & bareLimbMask;
             resultLimbs[i] = limb;
-            carry = (~diff) >> this._bareLimbLen;
+            if (limb !== 0) {
+                lastNonZeroResultLimb = i;
+            }
+            carry = ((~diff) & extendedLimbOverflow) >> bareLimbLen;
+        }
+        if (numberOfLimbs1 === numberOfLimbs2) {
+            result._numberOfLimbs = lastNonZeroResultLimb + 1;
+            return result;
         }
         // next subtract all but the last of the remaining limbs
         // note: numberOfLimbs1 >= numberOfLimbs2
         const numberOfLimbs1minus1 = numberOfLimbs1 - 1;
         for (let i = numberOfLimbs2; i < numberOfLimbs1minus1; i++) {
             const limb1 = limbs1[i];
-            const diff = (limb1 | this._extendedLimbOverflow) - carry;
-            const limb = diff & this._bareLimbMask;
+            const diff = (limb1 | extendedLimbOverflow) - carry;
+            const limb = diff & bareLimbMask;
             resultLimbs[i] = limb;
-            carry = (~diff) >> this._bareLimbLen;
+            if (limb !== 0) {
+                lastNonZeroResultLimb = i;
+            }
+            carry = ((~diff) & extendedLimbOverflow) >> bareLimbLen;
         }
         // finally subtract the last limb
         // and set the correct number of result limbs
         const lastLimb1 = limbs1[numberOfLimbs1minus1];
         // invariant: lastLimb !== 0
-        const lastDiff = (lastLimb1 | this._extendedLimbOverflow) - carry;
-        const lastResultLimb = lastDiff & this._bareLimbMask;
+        const lastDiff = lastLimb1 - carry;
+        const lastResultLimb = lastDiff & bareLimbMask;
         // invariant: carry must be zero because lastLimb !== 0
-        if (lastResultLimb === 0) {
-            result._numberOfLimbs = numberOfLimbs1minus1;  
-        } else {
+        if (lastResultLimb !== 0) {
             resultLimbs[numberOfLimbs1minus1] = lastResultLimb;
-            result._numberOfLimbs = numberOfLimbs1;
+            lastNonZeroResultLimb = i;
         }
+        result._numberOfLimbs = lastNonZeroResultLimb + 1;
         return result;
     }
     
@@ -504,7 +527,7 @@ class BigNaturalSystem {
         // precondition: numberOfBitsToShift < this._bareLimbLen
         const numberOfLimbs = arg._numberOfLimbs;
         const limbs = arg._limbs;
-        result.accomodate(numberOfLimbs);
+        result._accomodate(numberOfLimbs);
         const resultLimbs = result._limbs;
         // shift the most significant limb first
         const numberOfBitsToUnshift = this._bareLimbLen - numberOfBitsToShift;
@@ -518,10 +541,10 @@ class BigNaturalSystem {
             result._numberOfLimbs = numberOfLimbsMinus1;
         } else {
             result._numberOfLimbs = numberOfLimbs;
-            resultLimbs[numberOfLimbs1minus1] = mostSignificantResultLimb;
+            resultLimbs[numberOfLimbsMinus1] = mostSignificantResultLimb;
         }
         // then do the rest taking into acount the carry
-        for (let i = numberOfLimbsMinus1 - 1; i >= 0; i++) {
+        for (let i = numberOfLimbsMinus1 - 1; i >= 0; i--) {
             const limb = limbs[i];
             const nextCarry = limb & carryMask; 
             const resultLimb = 
@@ -538,7 +561,7 @@ class BigNaturalSystem {
         const numberOfRemainingLimbs = 
             Math.max(0, numberOfLimbs - numberOfLimbsToShift);
         const limbs = arg._limbs;
-        result.accomodate(numberOfRemainingLimbs);
+        result._accomodate(numberOfRemainingLimbs);
         const resultLimbs = result._limbs;
         // shifted the limbs
         for (let i = 0; i < numberOfRemainingLimbs; i++) {
@@ -551,15 +574,17 @@ class BigNaturalSystem {
     _shiftLeft(arg, result) {
         const numberOfLimbs = arg._numberOfLimbs;
         const limbs = arg._limbs;
-        result.accomodate(numberOfLimbs + 1);
+        result._accomodate(numberOfLimbs + 1);
         const resultLimbs = result._limbs;
+        const bareLimbLenMinusOne = this._bareLimbLenMinusOne;
+        const bareLimbMask = this._bareLimbMask;
         // shift the limbs from the least significant to the most significant
         const carryMask = 1 << (this._bareLimbLenMinusOne);
         let carry = 0;
         for (let i = 0; i < numberOfLimbs; i++) {
             const limb = limbs[i];
-            const nextCarry = (limb & carryMask) >> this._bareLimbLenMinusOne; 
-            const resultLimb = (limb << 1) | carry;
+            const nextCarry = (limb & carryMask) >> bareLimbLenMinusOne; 
+            const resultLimb = ((limb << 1) | carry) & bareLimbMask;
             resultLimbs[i] = resultLimb;
             carry = nextCarry;
         }
@@ -577,8 +602,9 @@ class BigNaturalSystem {
         // precondition: numberOfBitsToShift < this._bareLimbLen
         const numberOfLimbs = arg._numberOfLimbs;
         const limbs = arg._limbs;
-        result.accomodate(numberOfLimbs + 1);
+        result._accomodate(numberOfLimbs + 1);
         const resultLimbs = result._limbs;
+        const bareLimbMask = this._bareLimbMask;
         // shift the limbs from the least significant to the most significant
         const numberOfBitsToUnshift = this._bareLimbLen - numberOfBitsToShift;
         const carryMask = ((1 << numberOfBitsToShift) - 1) << numberOfBitsToUnshift;
@@ -586,7 +612,7 @@ class BigNaturalSystem {
         for (let i = 0; i < numberOfLimbs; i++) {
             const limb = limbs[i];
             const nextCarry = (limb & carryMask) >> numberOfBitsToUnshift; 
-            const resultLimb = (limb << numberOfBitsToShift) | carry;
+            const resultLimb = ((limb << numberOfBitsToShift) | carry) & bareLimbMask;
             resultLimbs[i] = resultLimb;
             carry = nextCarry;
         }
@@ -618,10 +644,10 @@ class BigNaturalSystem {
     }
     
     _shiftLeftByLimbsAndBits(arg, totalNumberOfBitsToShift, result) {
-        const numberOfLimbsToShift = Math.floor(totalNumberOfBits / this._bareLimbLen);
+        const numberOfLimbsToShift = Math.floor(totalNumberOfBitsToShift / this._bareLimbLen);
         const numberOfBitsToShift = (totalNumberOfBitsToShift % this._bareLimbLen);
         const numberOfLimbs = arg._numberOfLimbs;
-        result.accomdate(numberOfLimbs + numberOfLimbsToShift + 1);
+        result._accomodate(numberOfLimbs + numberOfLimbsToShift + 1);
         if (numberOfBitsToShift > 0) {
             this._shiftLeftByBits(arg, numberOfBitsToShift, result);
         }
@@ -632,10 +658,10 @@ class BigNaturalSystem {
     }
     
     _shiftRightByLimbsAndBits(arg, totalNumberOfBitsToShift, result) {
-        const numberOfLimbsToShift = Math.floor(totalNumberOfBits / this._bareLimbLen);
+        const numberOfLimbsToShift = Math.floor(totalNumberOfBitsToShift / this._bareLimbLen);
         const numberOfBitsToShift = (totalNumberOfBitsToShift % this._bareLimbLen);
         const numberOfLimbs = arg._numberOfLimbs;
-        result.accomdate(numberOfLimbs - numberOfLimbsToShift);
+        result._accomodate(numberOfLimbs - numberOfLimbsToShift);
         if (numberOfLimbsToShift > 0) {
             this._shiftRightByLimbs(arg, numberOfLimbsToShift, result);
         }
@@ -646,9 +672,7 @@ class BigNaturalSystem {
     }
     
     _shiftByLimbsAndBits(arg, totalNumberOfBitsToShiftLeft, result) {
-        const numberOfLimbsToShiftLeft = Math.floor(totalNumberOfBits / this._bareLimbLen);
-        const numberOfBitsToShiftLeft = (totalNumberOfBitsToShift % this._bareLimbLen);
-        if (totalNumberOfLimbsToShiftLeft > 0) {
+        if (totalNumberOfBitsToShiftLeft > 0) {
             this._shiftLeftByLimbsAndBits(arg, totalNumberOfBitsToShiftLeft, result);
         } else if (totalNumberOfBitsToShiftLeft < 0) {
             const totalNumberOfBitsToShiftRight = -totalNumberOfBitsToShiftLeft;
@@ -686,10 +710,10 @@ class BigNaturalSystem {
         result._numberOfLimbs = 0;
         const numberOfLimbsA = argA._numberOfLimbs;
         const limbsA = argA._limbs;
-        const numberOfLimbsB = argB._numberOfLimbs;
+        const numberOfLimbsB = argBmutable._numberOfLimbs;
         const requiredCapacity = numberOfLimbsB + numberOfLimbsA;
-        argBmutable.accomdate(requiredCapacity);
-        result.accomodate(requiredCapacity);
+        argBmutable._accomodate(requiredCapacity);
+        result._accomodate(requiredCapacity);
         for (let i = 0; i < numberOfLimbsA; i++) {
             const limbA = limbsA[i];
             for (let j = 0; j < this._bareLimbLen; j++) {
@@ -729,8 +753,8 @@ class BigNaturalSystem {
         //   * recurse (conceptually) with the intermediate 
         //     remainder taking the role of the divident
         const requiredCapacity = dividentmutable._numberOfLimbs;
-        divisormutable.accomodate(requiredCapacity);
-        result.accomdate(requiredCapacity);
+        divisormutable._accomodate(requiredCapacity);
+        result._accomodate(requiredCapacity);
         const limbicSystem = this._limbicSystem;
         let totalNumberOfBitsByWhichTheDivisorWasShifted = 0;
         do {
@@ -742,16 +766,18 @@ class BigNaturalSystem {
             if (numberOfDividentLimbs === 0) {
                return; // natural long division is done, remainder is zero
             }
-            const dividentLimbs = divident._limbs;
-            const divisorLimbs = divisor._limbs;
-            const lastDividentLimb = dividentLimbs[numberOfDividentLimbs];
-            const lastDivisorLimb = dividentLimbs[numberOfDividentLimbs];
+            const numberOfDividentLimbsMinusOne = numberOfDividentLimbs - 1;
+            const numberOfDivisorLimbsMinusOne = numberOfDivisorLimbs - 1;
+            const dividentLimbs = dividentmutable._limbs;
+            const divisorLimbs = divisormutable._limbs;
+            const lastDividentLimb = dividentLimbs[numberOfDividentLimbsMinusOne];
+            const lastDivisorLimb = divisorLimbs[numberOfDivisorLimbsMinusOne];
             const msbIndexInLastDividentLimb = 
-                limbicSystem._mostSignificantBitIndex(lastDividentLimb);
+                limbicSystem.mostSignificantBitIndex(lastDividentLimb);
             const msbIndexInLastDivisorLimb = 
-                limbicSystem._mostSignificantBitIndex(lastDivisorLimb);
-            const expDivident = (numberOfDividentLimbs-1) * this._bareLimbLen + msbIndexInLastDividentLimb;
-            const expDivisor = (numberOfDivisorLimbs-1) * this._bareLimbLen + msbIndexInLastDivisorLimb;
+                limbicSystem.mostSignificantBitIndex(lastDivisorLimb);
+            const expDivident = (numberOfDividentLimbsMinusOne * this._bareLimbLen) + msbIndexInLastDividentLimb;
+            const expDivisor = (numberOfDivisorLimbsMinusOne * this._bareLimbLen) + msbIndexInLastDivisorLimb;
             const expDistanceBetweenDividentAndDivisor = expDivident - expDivisor;
             if (expDistanceBetweenDividentAndDivisor < -totalNumberOfBitsByWhichTheDivisorWasShifted) {
                 break; // natural long division is done, divident contains the remainder
@@ -759,7 +785,7 @@ class BigNaturalSystem {
             this._shiftByLimbsAndBits(
                 divisormutable, expDistanceBetweenDividentAndDivisor, divisormutable);
             totalNumberOfBitsByWhichTheDivisorWasShifted += expDistanceBetweenDividentAndDivisor;
-            if (dividentmutable._isLargerThanOrEqualTo(divisormutable)) {
+            if (dividentmutable.isLargerThanOrEqualTo(divisormutable)) {
                 // divisor has the same exponent and is less than or equal to the divident 
                 // the same exponent means the most significant bit for both is 1
                 // from this it follows that the difference between the divident and the divisor
@@ -786,9 +812,9 @@ class BigNaturalSystem {
                 // it follows the divisor will fit the divident exactly once
             } 
             // we can subtract once:
-            this._subtract(dividentmutable, divisormutable, dividentmutable);
+            this.subtract(dividentmutable, divisormutable, dividentmutable);
             // and add the corresponding bit in the result:
-            this._addPowerOfTwo(result, totalNumberOfBitsByWhichTheDivisorWasShifted);
+            this._incrementWithPowerOfTwo(result, totalNumberOfBitsByWhichTheDivisorWasShifted);
             // the intermediate remainder will now be strictly less than the shifted divisor 
             // so we need not subtract the shifted divisor further in this position
             // this step in the long division is done, 
@@ -815,19 +841,20 @@ class BigIntegerSystem {
 class BigNatural {
 
     /**
-     * @param {BigNaturalSystem} bigNaturalSystem - The number system with operations 
-     *   and representational constants.
-     * @param {number} initialCapacity - Pre-allocate space for this many limbs.
+     * @param {BigNaturalSystem} bigNaturalSystem - The number system with 
+     *   operations and representational constants.
+     * @param {number} initialCapacity - Pre-allocate space for this many 
+     *   limbs.
      */
     constructor(bigNaturalSystem, initialCapacity) {
         this._system = bigNaturalSystem;
-        this._limbs = Uint32Array(initialCapacity);
+        this._limbs = new Uint32Array(initialCapacity);
         this._numberOfLimbs = 0; // invariant: last limb is nonzero
     }
 
     /** Check if this number is zero. 
      *
-     * @returns {boolean} Returns true iff this number is zero.
+     * @returns {boolean} Returns `true` iff this number is zero.
      */
     isZero() {
         return this._numberOfLimbs === 0;
@@ -916,14 +943,14 @@ class BigNatural {
         for (let i = 0; i < numberOfLimbsMinusOne; i++) {
             let limb = limbs[i];
             for (let j = 0; j < numberOfNibbles; j++) {
-                nibble = (limb & 0xf);
+                const nibble = (limb & 0xf);
                 yield nibble;
                 limb = limb >> 4;
             } 
         }
-        let lastLimb = limbs[numberOfLimbsMinus1];
+        let lastLimb = limbs[numberOfLimbsMinusOne];
         while (lastLimb !== 0) {
-            nibble = (limb & 0xf);
+            const nibble = (lastLimb & 0xf);
             yield nibble;
             lastLimb = lastLimb >> 4;
         }; 
@@ -945,7 +972,7 @@ class BigNatural {
         if (alphabet === undefined) {
             alphabet = "0123456789abcdef";
         }
-        for (const digit of this.hexadecimalNibbles()) {
+        for (const digit of this._hexadecimalNibbles()) {
             yield alphabet[digit];
         }
     }
@@ -969,14 +996,14 @@ class BigNatural {
         for (let i = 0; i < numberOfLimbsMinusOne; i++) {
             let limb = limbs[i];
             for (let j = 0; j < numberOfBits; j++) {
-                bit = (limb & 1);
+                const bit = (limb & 1);
                 yield bit;
                 limb = limb >> 1;
             } 
         }
-        let lastLimb = limbs[numberOfLimbsMinus1];
+        let lastLimb = limbs[numberOfLimbsMinusOne];
         while (lastLimb !== 0) {
-            bit = (limb & 1);
+            const bit = (lastLimb & 1);
             yield bit;
             lastLimb = lastLimb >> 1;
         };
@@ -993,7 +1020,7 @@ class BigNatural {
         if (alphabet === undefined) {
             alphabet = "01";
         }
-        for (const digit of this.binaryBits()) {
+        for (const digit of this._binaryBits()) {
             yield alphabet[digit];
         }
     }
@@ -1080,7 +1107,8 @@ class BigNatural {
 
     /** Convert this big natural to a small javascript number.
      *
-     * The number must fit in 28 bits or this method throws an error.
+     * The big natural number must fit in 28 bits or this method throws 
+     * an error.
      *
      * @returns {number} The value as a javascript number.
      */
@@ -1117,10 +1145,11 @@ class BigNatural {
 
     /** Create a copy of this big natural with its own storage.
      *
-     * @returns {BigNatual} A clone that can be independently modified/stored.
+     * @returns {BigNatual} A clone that can be independently 
+     *   modified/stored.
      */
     clone() {
-        const clone = new BigNatural(this._capacity());
+        const clone = new BigNatural(this._system, this._numberOfLimbs);
         return clone.assign(this);
     }
 
@@ -1131,7 +1160,7 @@ class BigNatural {
     _accomodate(ensuredCapacity) {
         const currentCapacity = this._capacity();
         if (currentCapacity < ensuredCapacity) {
-            const moreLimbs = Uint32Array(ensuredCapacity);
+            const moreLimbs = new Uint32Array(ensuredCapacity);
             const numberOfLimbs = this._numberOfLimbs;
             const limbs = this._limbs;
             for (let i = 0; i < numberOfLimbs; i++) {
